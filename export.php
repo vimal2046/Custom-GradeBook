@@ -28,7 +28,7 @@ class grade_export_customexcel extends grade_export {
         $worksheet = $workbook->add_worksheet('Grades');
 
         // -------------------------------
-        // Write headers
+        // Write headerss
         // -------------------------------
         $headers = ['Student ID', 'Full Name'];
         foreach ($this->columns as $col) {

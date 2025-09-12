@@ -2,13 +2,16 @@
 defined('MOODLE_INTERNAL') || die();
 
 require_once($CFG->libdir . '/gradelib.php');
-require_once($CFG->libdir . '/excellib.class.php');
 require_once($CFG->dirroot . '/grade/export/lib.php');
 require_once($CFG->dirroot . '/grade/lib.php');
+require_once(__DIR__ . '/vendor/autoload.php');
 
-/**
- * Custom Excel grade export.
- */
+// PhpSpreadsheet classes
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+
 class grade_export_customexcel extends grade_export {
 
     public function __construct($course, $groupid = 0, $itemlist = null, $exportfeedback = false, $onlyactive = false) {
@@ -20,71 +23,105 @@ class grade_export_customexcel extends grade_export {
 
         $filename = clean_filename("grades-{$this->course->shortname}.xlsx");
 
-        // Workbook setup.
-        $workbook = new \MoodleExcelWorkbook('-');
-        $workbook->send($filename);
-        $worksheet = $workbook->add_worksheet('Results template sample');
+        // Create PhpSpreadsheet workbook + worksheet.
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Results template sample');
 
-        // Formats.
-        $format_bold = $workbook->add_format(['bold' => 1]);
-        $format_notes = $workbook->add_format(['italic' => 1]);
+        // Styles
+        $headerStyle = [
+            'font' => ['bold' => true],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+            'fill' => [
+                'fillType' => Fill::FILL_SOLID,
+                'startColor' => ['rgb' => 'F8CBAD'] // Orange, Accent 6, Lighter 60%
+            ]
+        ];
+        $weightStyle = ['alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]];
+        $notesStyle = ['font' => ['italic' => true]];
 
         // -------------------------------
         // Metadata & Notes
         // -------------------------------
-        $worksheet->write(0, 0, 'Subject code');
-        $worksheet->write(0, 1, $this->course->shortname);
+        $sheet->setCellValue('A1', 'Subject code');
+        $sheet->setCellValue('B1', $this->course->shortname);
 
-        $worksheet->write(1, 0, 'Subject name');
-        $worksheet->write(1, 1, $this->course->fullname);
+        $sheet->setCellValue('A2', 'Subject name');
+        $sheet->setCellValue('B2', $this->course->fullname);
 
-        $worksheet->write(2, 0, 'Delivery mode');
-        $worksheet->write(2, 1, '---'); // TODO: fetch from course custom fields if available.
+        $sheet->setCellValue('A3', 'Delivery mode');
+        $sheet->setCellValue('B3', '---');
 
-        $worksheet->write(3, 0, 'Campus');
-        $worksheet->write(3, 1, '---');
+        $sheet->setCellValue('A4', 'Campus');
+        $sheet->setCellValue('B4', '---');
 
-        // Notes (right side).
-        $worksheet->write(0, 3, 'Please note:', $format_bold);
-        $worksheet->write(1, 3, 'A dash (-) signifies a student did not attempt the task', $format_notes);
-        $worksheet->write(2, 3, 'A zero (0) signifies a student submitted but got 0 marks', $format_notes);
-        $worksheet->write(3, 3, 'All Course totals are rounded to the whole number', $format_notes);
+        $sheet->setCellValue('D1', 'Please note:');
+        $sheet->getStyle('D1')->applyFromArray($headerStyle);
+        $sheet->setCellValue('D2', 'A dash (-) signifies a student did not attempt the task');
+        $sheet->getStyle('D2')->applyFromArray($notesStyle);
+        $sheet->setCellValue('D3', 'A zero (0) signifies a student submitted but got 0 marks');
+        $sheet->getStyle('D3')->applyFromArray($notesStyle);
+        $sheet->setCellValue('D4', 'All Course totals are rounded to the whole number');
+        $sheet->getStyle('D4')->applyFromArray($notesStyle);
 
         // -------------------------------
-        // Fetch assessment items and students
+        // Fetch items and users
         // -------------------------------
         $items = grade_item::fetch_all(['courseid' => $this->course->id]);
         $context = context_course::instance($this->course->id);
         $users = get_enrolled_users($context);
 
         // -------------------------------
-        // Header row
+        // Header row 1 (assessments, total, grade)
         // -------------------------------
-        $row = 6;
-        $col = 0;
-        $worksheet->write($row, $col++, 'Student ID', $format_bold);
-        $worksheet->write($row, $col++, 'First name', $format_bold);
-        $worksheet->write($row, $col++, 'Surname', $format_bold);
-
+        $row = 7;
+        $col = 4; // column D
         $assessmentitems = [];
         foreach ($items as $item) {
             if ($item->itemtype === 'mod') {
-                $worksheet->write($row, $col++, $item->get_name(), $format_bold);
+                $coord = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col) . $row;
+                $sheet->setCellValue($coord, $item->get_name());
+                $sheet->getStyle($coord)->applyFromArray($headerStyle);
                 $assessmentitems[] = $item;
+                $col++;
             }
         }
-
-        $worksheet->write($row, $col++, 'Total', $format_bold);
-        $worksheet->write($row, $col++, 'Grade', $format_bold);
+        $coord = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col) . $row;
+        $sheet->setCellValue($coord, 'Total');
+        $sheet->getStyle($coord)->applyFromArray($headerStyle);
+        $col++;
+        $coord = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col) . $row;
+        $sheet->setCellValue($coord, 'Grade');
+        $sheet->getStyle($coord)->applyFromArray($headerStyle);
 
         // -------------------------------
-        // Weighting row
+        // Header row 2 (StudentID etc + weightings)
         // -------------------------------
         $row++;
-        $col = 3;
+        $sheet->setCellValue('A' . $row, 'Student ID');
+        $sheet->getStyle('A' . $row)->applyFromArray($headerStyle);
+        $sheet->setCellValue('B' . $row, 'First name');
+        $sheet->getStyle('B' . $row)->applyFromArray($headerStyle);
+        $sheet->setCellValue('C' . $row, 'Surname');
+        $sheet->getStyle('C' . $row)->applyFromArray($headerStyle);
+
+        $col = 4;
+        $totalweight = 0;
         foreach ($assessmentitems as $item) {
-            $worksheet->write($row, $col++, $item->aggregationcoef, $format_notes);
+            $weight = $item->aggregationcoef * 100;
+            $totalweight += $weight;
+            $coord = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col) . $row;
+            $sheet->setCellValue($coord, $weight . '%');
+            $sheet->getStyle($coord)->applyFromArray($weightStyle);
+            $col++;
         }
+        $coord = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col) . $row;
+        $sheet->setCellValue($coord, $totalweight . '%');
+        $sheet->getStyle($coord)->applyFromArray($weightStyle);
+        $col++;
+        $coord = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col) . $row;
+        $sheet->setCellValue($coord, '');
+        $sheet->getStyle($coord)->applyFromArray($weightStyle);
 
         // -------------------------------
         // Student rows
@@ -93,45 +130,38 @@ class grade_export_customexcel extends grade_export {
         $courseitem = grade_item::fetch(['courseid' => $this->course->id, 'itemtype' => 'course']);
 
         foreach ($users as $user) {
-            $col = 0;
+            $sheet->setCellValue('A' . $row, $user->idnumber ?: $user->id);
+            $sheet->setCellValue('B' . $row, $user->firstname);
+            $sheet->setCellValue('C' . $row, $user->lastname);
 
-            $studentid = $user->idnumber ?: $user->id;
-            $worksheet->write($row, $col++, $studentid);
-            $worksheet->write($row, $col++, $user->firstname);
-            $worksheet->write($row, $col++, $user->lastname);
-
-            // Grades per assessment
+            $col = 4;
             foreach ($assessmentitems as $item) {
+                $coord = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col) . $row;
                 $grade = grade_grade::fetch(['itemid' => $item->id, 'userid' => $user->id]);
-                if ($grade && $grade->finalgrade !== null) {
-                    $worksheet->write($row, $col++, round($grade->finalgrade, 2));
-                } else {
-                    $worksheet->write($row, $col++, '-');
-                }
+                $sheet->setCellValue($coord, ($grade && $grade->finalgrade !== null) ? round($grade->finalgrade, 2) : '-');
+                $col++;
             }
 
-            // Course total + Letter grade
             if ($courseitem) {
                 $coursegrade = grade_grade::fetch(['itemid' => $courseitem->id, 'userid' => $user->id]);
-                if ($coursegrade && $coursegrade->finalgrade !== null) {
-                    $worksheet->write($row, $col++, round($coursegrade->finalgrade, 0));
-                    $worksheet->write($row, $col++, grade_format_gradevalue_letter($coursegrade->finalgrade, $courseitem));
-                } else {
-                    $worksheet->write($row, $col++, '-');
-                    $worksheet->write($row, $col++, '-');
-                }
-            } else {
-                $worksheet->write($row, $col++, '-');
-                $worksheet->write($row, $col++, '-');
+                $coord = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col) . $row;
+                $sheet->setCellValue($coord, ($coursegrade && $coursegrade->finalgrade !== null) ? round($coursegrade->finalgrade, 2) : '-');
+                $col++;
+                $coord = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col) . $row;
+                $sheet->setCellValue($coord, ($coursegrade && $coursegrade->finalgrade !== null) ? grade_format_gradevalue_letter($coursegrade->finalgrade, $courseitem) : '-');
             }
-
             $row++;
         }
 
         // -------------------------------
-        // Close file
+        // Output
         // -------------------------------
-        $workbook->close();
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header("Content-Disposition: attachment;filename=\"$filename\"");
+        header('Cache-Control: max-age=0');
+
+        $writer = new Xlsx($spreadsheet);
+        $writer->save('php://output');
         exit;
     }
 }

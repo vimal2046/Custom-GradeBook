@@ -23,7 +23,7 @@ require_once('export.php');
 // $context = context_course::instance($courseid);
 // require_capability('gradeexport/customexcel:view', $context);
 
-// // ✅ Pass the full course object, not just ID
+// // Pass the full course object, not just ID
 // $export = new grade_export_customexcel($course);
 // $export->print_grades();
 
@@ -37,6 +37,6 @@ require_login($course);
 $context = context_course::instance($courseid);
 require_capability('gradeexport/customexcel:view', $context);
 
-// ✅ Pass the full course object, not just ID
+//  Pass the full course object, not just ID
 $export = new grade_export_customexcel($course);
 $export->print_grades();

@@ -19,7 +19,7 @@ class grade_export_customexcel extends grade_export {
     }
 
     public function print_grades() {
-        global $CFG;
+        global $CFG, $DB;
 
         $filename = clean_filename("grades-{$this->course->shortname}.xlsx");
 
@@ -65,11 +65,39 @@ class grade_export_customexcel extends grade_export {
         $sheet->getStyle('D4')->applyFromArray($notesStyle);
 
         // -------------------------------
-        // Fetch items and users
+        // Fetch items and students only
         // -------------------------------
         $items = grade_item::fetch_all(['courseid' => $this->course->id]);
         $context = context_course::instance($this->course->id);
-        $users = get_enrolled_users($context);
+
+        $studentrole = $DB->get_record('role', ['shortname' => 'student']);
+        $users = [];
+        if ($studentrole) {
+            $users = get_role_users($studentrole->id, $context);
+        }
+
+        // Sort users by student number (idnumber) ascending
+        usort($users, function($a, $b) {
+            return strcmp($a->idnumber, $b->idnumber);
+        });
+
+        // -------------------------------
+        // If no students → write message & exit
+        // -------------------------------
+        if (empty($users)) {
+            $sheet->setCellValue('A6', 'No students are enrolled in this course or no grades available.');
+            $sheet->getStyle('A6')->applyFromArray([
+                'font' => ['bold' => true, 'italic' => true, 'color' => ['rgb' => 'FF0000']]
+            ]);
+
+            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            header("Content-Disposition: attachment;filename=\"$filename\"");
+            header('Cache-Control: max-age=0');
+
+            $writer = new Xlsx($spreadsheet);
+            $writer->save('php://output');
+            exit;
+        }
 
         // -------------------------------
         // Header row 1 (assessments, total, grade)
@@ -130,7 +158,8 @@ class grade_export_customexcel extends grade_export {
         $courseitem = grade_item::fetch(['courseid' => $this->course->id, 'itemtype' => 'course']);
 
         foreach ($users as $user) {
-            $sheet->setCellValue('A' . $row, $user->idnumber ?: $user->id);
+            $studentid = !empty($user->idnumber) ? $user->idnumber : '-';
+            $sheet->setCellValue('A' . $row, $studentid);
             $sheet->setCellValue('B' . $row, $user->firstname);
             $sheet->setCellValue('C' . $row, $user->lastname);
 

@@ -39,6 +39,8 @@ class grade_export_customexcel extends grade_export {
         ];
         $weightStyle = ['alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]];
         $notesStyle = ['font' => ['italic' => true]];
+        $notesBoldStyle = [
+            'font' => ['bold' => true]];
 
         // -------------------------------
         // Metadata & Notes
@@ -57,12 +59,12 @@ class grade_export_customexcel extends grade_export {
 
         $sheet->setCellValue('D1', 'Please note:');
         $sheet->getStyle('D1')->applyFromArray($headerStyle);
-        $sheet->setCellValue('D2', 'A dash (-) signifies a student did not attempt the task');
+        $sheet->setCellValue('D2', 'A dash (-) signifies a student that they did not submit the assessment and automatically fail the subject');
         $sheet->getStyle('D2')->applyFromArray($notesStyle);
-        $sheet->setCellValue('D3', 'A zero (0) signifies a student submitted but got 0 marks');
+        $sheet->setCellValue('D3', 'A zero (0) signifies a student has submitted an assessment but it was beyond the 2 week late assessment submission. They are still eligible to pass the subject if their overall total is greater than 50%.');
         $sheet->getStyle('D3')->applyFromArray($notesStyle);
         $sheet->setCellValue('D4', 'All Course totals are rounded to the whole number');
-        $sheet->getStyle('D4')->applyFromArray($notesStyle);
+        $sheet->getStyle('D4')->applyFromArray($notesBoldStyle);
 
         // -------------------------------
         // Fetch items and students only
@@ -102,7 +104,7 @@ class grade_export_customexcel extends grade_export {
         // -------------------------------
         // Header row 1 (assessments, total, grade)
         // -------------------------------
-        $row = 7;
+        $row = 6;  // Start at row 6, row 5 stays blank
         $col = 4; // column D
         $assessmentitems = [];
         foreach ($items as $item) {
@@ -121,6 +123,15 @@ class grade_export_customexcel extends grade_export {
         $coord = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col) . $row;
         $sheet->setCellValue($coord, 'Grade');
         $sheet->getStyle($coord)->applyFromArray($headerStyle);
+
+        // Enable text wrapping on row 6 (assessment names row)
+        $sheet->getStyle('A6:' . \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col) . '6')
+            ->getAlignment()
+            ->setWrapText(true)
+            ->setVertical(Alignment::VERTICAL_CENTER);
+
+        // Optionally increase row height for visibility
+        $sheet->getRowDimension(6)->setRowHeight(15);
 
         // -------------------------------
         // Header row 2 (StudentID etc + weightings)
@@ -150,6 +161,19 @@ class grade_export_customexcel extends grade_export {
         $coord = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col) . $row;
         $sheet->setCellValue($coord, '');
         $sheet->getStyle($coord)->applyFromArray($weightStyle);
+        
+        // -------------------------------
+        // Set column widths
+        // -------------------------------
+        $sheet->getColumnDimension('A')->setWidth(14);
+        $sheet->getColumnDimension('B')->setWidth(13);
+        $sheet->getColumnDimension('C')->setWidth(13);
+
+        // From D onward set width = 12
+        for ($i = 4; $i <= $col; $i++) {
+            $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i);
+            $sheet->getColumnDimension($colLetter)->setWidth(13);
+        }
 
         // -------------------------------
         // Student rows

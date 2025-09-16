@@ -147,7 +147,7 @@ class grade_export_customexcel extends grade_export {
         $col = 4;
         $totalweight = 0;
         foreach ($assessmentitems as $item) {
-            $weight = $item->aggregationcoef * 100;
+            $weight = $item->aggregationcoef;
             $totalweight += $weight;
             $coord = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col) . $row;
             $sheet->setCellValue($coord, $weight . '%');

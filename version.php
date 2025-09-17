@@ -18,7 +18,7 @@
  * Version details for the custom Excel grade export plugin.
  *
  * @package    gradeexport_customexcel
- * @copyright  2025 Your Name
+ * @copyright  2025 Alphacuricus University
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 

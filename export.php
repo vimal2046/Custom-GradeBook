@@ -1,7 +1,7 @@
 <?php
 require_once('../../../config.php');
 require_once($CFG->dirroot.'/grade/export/lib.php');
-require_once($CFG->dirroot.'/grade/export/customexcel/exporter.php'); // your class
+require_once($CFG->dirroot.'/grade/export/customexcel/classes/exporter.php'); // your class
 
 $id             = required_param('id', PARAM_INT);
 $groupid        = optional_param('groupid', 0, PARAM_INT);

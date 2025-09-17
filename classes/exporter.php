@@ -4,7 +4,7 @@ defined('MOODLE_INTERNAL') || die();
 require_once($CFG->libdir . '/gradelib.php');
 require_once($CFG->dirroot . '/grade/export/lib.php');
 require_once($CFG->dirroot . '/grade/lib.php');
-require_once(__DIR__ . '/vendor/autoload.php');
+require_once(__DIR__ . '/../vendor/autoload.php');
 
 // PhpSpreadsheet classes
 use PhpOffice\PhpSpreadsheet\Spreadsheet;

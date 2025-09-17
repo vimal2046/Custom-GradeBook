@@ -14,11 +14,20 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
-require_once('../../../config.php');
-require_once($CFG->dirroot.'/grade/export/lib.php');
-require_once($CFG->dirroot.'/grade/export/grade_export_form.php');
+/**
+ * Custom Excel grade export index page.
+ *
+ * @package    gradeexport_customexcel
+ * @category   output
+ * @copyright  2025 Your Name
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 
-$id = required_param('id', PARAM_INT); // Course id.
+require_once('../../../config.php');
+require_once($CFG->dirroot . '/grade/export/lib.php');
+require_once($CFG->dirroot . '/grade/export/grade_export_form.php');
+
+$id = required_param('id', PARAM_INT); // Course ID.
 
 $PAGE->set_url('/grade/export/customexcel/index.php', ['id' => $id]);
 
@@ -60,7 +69,7 @@ $actionurl = new moodle_url('/grade/export/customexcel/export.php');
 $formoptions = [
     'publishing' => true,
     'simpleui' => true,
-    'multipledisplaytypes' => true
+    'multipledisplaytypes' => true,
 ];
 
 // Create export form.

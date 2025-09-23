@@ -39,6 +39,7 @@ use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
 
 /**
  * Custom Excel grade export class.
@@ -173,7 +174,7 @@ class grade_export_customexcel extends grade_export {
             ->setVertical(Alignment::VERTICAL_CENTER);
 
         // Increase row height for visibility.
-        $sheet->getRowDimension(6)->setRowHeight(15);
+        $sheet->getRowDimension(6)->setRowHeight(-1);
         // Header row 2 (Student ID + weightings).
         $row++;
         $sheet->setCellValue('A' . $row, 'Student ID');
@@ -186,7 +187,7 @@ class grade_export_customexcel extends grade_export {
         $col = 4;
         $totalweight = 0;
         foreach ($assessmentitems as $item) {
-            $weight = $item->aggregationcoef;
+            $weight = $item->aggregationcoef * 100;
             $totalweight += $weight;
             $coord = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col) . $row;
             $sheet->setCellValue($coord, $weight . '%');
@@ -204,6 +205,32 @@ class grade_export_customexcel extends grade_export {
         $sheet->getColumnDimension('A')->setWidth(14);
         $sheet->getColumnDimension('B')->setWidth(13);
         $sheet->getColumnDimension('C')->setWidth(13);
+
+
+
+        // $col still points to the last header column index.
+        $lastcolletter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col);
+
+        // 1. Borders only for assessment names row (D6 → lastcol6).
+        $sheet->getStyle("D6:{$lastcolletter}6")->applyFromArray([
+            'borders' => [
+                'allBorders' => [
+                    'borderStyle' => Border::BORDER_THIN,
+                    'color' => ['rgb' => '000000'],
+                ],
+            ],
+        ]);
+
+        // 2. Borders for the weights + ID headers row (A7 → lastcol7).
+        $sheet->getStyle("A7:{$lastcolletter}7")->applyFromArray([
+            'borders' => [
+                'allBorders' => [
+                    'borderStyle' => Border::BORDER_THIN,
+                    'color' => ['rgb' => '000000'],
+                ],
+            ],
+        ]);
+
         for ($i = 4; $i <= $col; $i++) {
             $colletter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i);
             $sheet->getColumnDimension($colletter)->setWidth(13);
@@ -244,6 +271,18 @@ class grade_export_customexcel extends grade_export {
             }
             $row++;
         }
+            $lastcolletter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col);
+            $lastrow = $row - 1; // last student row filled
+
+            // Apply only an outline border around the whole grade box (A6 → last student row).
+            $sheet->getStyle("A7:{$lastcolletter}{$lastrow}")->applyFromArray([
+                'borders' => [
+                    'outline' => [
+                        'borderStyle' => Border::BORDER_THIN,
+                        'color' => ['rgb' => '000000'],
+                    ],
+                ],
+            ]);
 
         // Output.
 

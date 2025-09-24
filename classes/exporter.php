@@ -18,7 +18,7 @@
  * Custom Excel grade exporter.
  *
  * @package    gradeexport_customexcel
- * @copyright  2025 Alphacuricus University
+ * @copyright  2025 AC University
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 

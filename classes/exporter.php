@@ -82,6 +82,7 @@ class grade_export_customexcel extends grade_export {
     $sheet->setCellValue('A2', 'Subject name');
     $sheet->setCellValue('B2', $this->course->fullname);
 
+
     $sheet->setCellValue('D1', 'Please note:');
     $sheet->getStyle('D1')->applyFromArray($headerstyle);
     $sheet->setCellValue('D2', 'A dash (-) signifies no submission (automatic fail).');
@@ -116,8 +117,10 @@ class grade_export_customexcel extends grade_export {
                 $courseitem = $item;
             }
         }
-    } else {
-        // 🚨 No items selected → stop and output message.
+    }
+
+    // 🚨 Final check: if no assignment items and no course total selected.
+    if (empty($assessmentitems) && empty($courseitem)) {
         $sheet->setCellValue('A6', 'No grade items selected for export.');
         $sheet->getStyle('A6')->applyFromArray([
             'font' => ['bold' => true, 'italic' => true, 'color' => ['rgb' => 'FF0000']],
@@ -129,6 +132,7 @@ class grade_export_customexcel extends grade_export {
         $writer->save('php://output');
         exit;
     }
+
 
     // --------------------------------------------------------------------
     // Users (active only if selected).

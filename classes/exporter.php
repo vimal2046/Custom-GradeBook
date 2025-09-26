@@ -56,193 +56,182 @@ class grade_export_customexcel extends grade_export {
      * Generate and output the Excel file with grades.
      */
     public function print_grades() {
-        global $DB;
+    global $DB;
 
-        $filename = clean_filename("grades-{$this->course->shortname}.xlsx");
+    $filename = clean_filename("grades-{$this->course->shortname}.xlsx");
 
-        $spreadsheet = new Spreadsheet();
-        $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('Results template sample');
+    $spreadsheet = new Spreadsheet();
+    $sheet = $spreadsheet->getActiveSheet();
+    $sheet->setTitle('Results template sample');
 
-        // Styles.
-        $headerstyle = [
-            'font' => ['bold' => true],
-            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
-            'fill' => [
-                'fillType' => Fill::FILL_SOLID,
-                'startColor' => ['rgb' => 'F8CBAD'],
-            ],
-        ];
-        $weightstyle = ['alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]];
-        $notesstyle = ['font' => ['italic' => true]];
-        $notesboldstyle = ['font' => ['bold' => true]];
+    // Styles.
+    $headerstyle = [
+        'font' => ['bold' => true],
+        'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+        'fill' => [
+            'fillType' => Fill::FILL_SOLID,
+            'startColor' => ['rgb' => 'F8CBAD'],
+        ],
+    ];
+    $notesstyle = ['font' => ['italic' => true]];
+    $notesboldstyle = ['font' => ['bold' => true]];
 
-        // Metadata and notes.
-        $sheet->setCellValue('A1', 'Subject code');
-        $sheet->setCellValue('B1', $this->course->shortname);
-        $sheet->setCellValue('A2', 'Subject name');
-        $sheet->setCellValue('B2', $this->course->fullname);
-        $sheet->setCellValue('A3', 'Delivery mode');
-        $sheet->setCellValue('B3', '---');
-        $sheet->setCellValue('A4', 'Campus');
-        $sheet->setCellValue('B4', '---');
+    // Metadata and notes.
+    $sheet->setCellValue('A1', 'Subject code');
+    $sheet->setCellValue('B1', $this->course->shortname);
+    $sheet->setCellValue('A2', 'Subject name');
+    $sheet->setCellValue('B2', $this->course->fullname);
 
-        $sheet->setCellValue('D1', 'Please note:');
-        $sheet->getStyle('D1')->applyFromArray($headerstyle);
-         $sheet->setCellValue(
-            'D2',
-            'A dash (-) signifies a student that they did not submit the assessment and automatically fail the subject.'
-        );
-        $sheet->getStyle('D2')->applyFromArray($notesstyle);
-         $sheet->setCellValue(
-            'D3',
-            'A zero (0) signifies a student has submitted an assessment but it was beyond the 2 week late assessment '
-            . 'submission. They are still eligible to pass the subject if their overall total is greater than 50%.'
-        );
-        $sheet->getStyle('D3')->applyFromArray($notesstyle);
-        $sheet->setCellValue('D4', 'All course totals are rounded to the whole number.');
-        $sheet->getStyle('D4')->applyFromArray($notesboldstyle);
+    $sheet->setCellValue('D1', 'Please note:');
+    $sheet->getStyle('D1')->applyFromArray($headerstyle);
+    $sheet->setCellValue('D2', 'A dash (-) signifies no submission (automatic fail).');
+    $sheet->getStyle('D2')->applyFromArray($notesstyle);
+    $sheet->setCellValue('D3', 'A zero (0) signifies late submission beyond 2 weeks.');
+    $sheet->getStyle('D3')->applyFromArray($notesstyle);
+    $sheet->setCellValue('D4', 'All course totals are rounded to the whole number.');
+    $sheet->getStyle('D4')->applyFromArray($notesboldstyle);
 
-               // Fetch items and students.
-        $items = grade_item::fetch_all(['courseid' => $this->course->id]);
-        $context = context_course::instance($this->course->id);
-
-        // Users.
-        $studentrole = $DB->get_record('role', ['shortname' => 'student']);
-        $users = [];
-        if ($studentrole) {
-            $users = get_role_users($studentrole->id, $context);
+    // --------------------------------------------------------------------
+    // Handle selected grade items.
+    // --------------------------------------------------------------------
+    $selecteditemids = [];
+    if (!empty($this->formdata->itemids)) {
+        if (is_array($this->formdata->itemids)) {
+            $selecteditemids = $this->formdata->itemids;
+        } else {
+            $selecteditemids = explode(',', $this->formdata->itemids);
         }
+    }
 
-        // Filter only active users if option selected.
-        $users = [];
-        $gui = new graded_users_iterator($this->course, $assessmentitems, $this->groupid);
-        $gui->require_active_enrolment($this->onlyactive);
-        $gui->init();
+    $assessmentitems = [];
+    $courseitem = null;
 
-        while ($userdata = $gui->next_user()) {
-            $users[] = $userdata->user;
-        }
-
-        $gui->close();
-
-
-        usort($users, fn($a, $b) => strcmp((string)$a->idnumber, (string)$b->idnumber));
-        // Sort users by student number (idnumber).
-        usort($users, function($a, $b) {
-            return strcmp((string)$a->idnumber, (string)$b->idnumber);
-        });
-        // If no students → write message and exit.
-        if (empty($users)) {
-            $sheet->setCellValue('A6', 'No students are enrolled in this course or no grades available.');
-            $sheet->getStyle('A6')->applyFromArray([
-                'font' => ['bold' => true, 'italic' => true, 'color' => ['rgb' => 'FF0000']],
-            ]);
-            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-            header("Content-Disposition: attachment;filename=\"$filename\"");
-            header('Cache-Control: max-age=0');
-            $writer = new Xlsx($spreadsheet);
-            $writer->save('php://output');
-            exit;
-        }
-
-        // Header row 1 (assessments, total, grade).
-        $row = 6;  // Start at row 6.
-        $col = 4; // Column D.
-        $assessmentitems = [];
-        foreach ($items as $item) {
-            if ($item->itemtype === 'mod') {
-                $coord = Coordinate::stringFromColumnIndex($col) . $row;
-                $sheet->setCellValue($coord, $item->get_name());
-                $sheet->getStyle($coord)->applyFromArray($headerstyle);
+    if (!empty($selecteditemids)) {
+        foreach ($selecteditemids as $itemid) {
+            $item = grade_item::fetch(['id' => $itemid, 'courseid' => $this->course->id]);
+            if ($item && $item->itemtype === 'mod') {
                 $assessmentitems[] = $item;
-                $col += count($this->displaytype);
-                if ($this->export_feedback) {
-                    $coord = Coordinate::stringFromColumnIndex($col) . $row;
-                    $sheet->setCellValue($coord, get_string('feedback'));
-                    $sheet->getStyle($coord)->applyFromArray($headerstyle);
-                    $col++;
-                }
+            }
+            if ($item && $item->itemtype === 'course') {
+                $courseitem = $item;
             }
         }
+    } else {
+        // 🚨 No items selected → stop and output message.
+        $sheet->setCellValue('A6', 'No grade items selected for export.');
+        $sheet->getStyle('A6')->applyFromArray([
+            'font' => ['bold' => true, 'italic' => true, 'color' => ['rgb' => 'FF0000']],
+        ]);
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header("Content-Disposition: attachment;filename=\"$filename\"");
+        header('Cache-Control: max-age=0');
+        $writer = new Xlsx($spreadsheet);
+        $writer->save('php://output');
+        exit;
+    }
+
+    // --------------------------------------------------------------------
+    // Users (active only if selected).
+    // --------------------------------------------------------------------
+    $users = [];
+    $gui = new graded_users_iterator($this->course, $assessmentitems, $this->groupid);
+    $gui->require_active_enrolment($this->onlyactive);
+    $gui->init();
+
+    while ($userdata = $gui->next_user()) {
+        $users[] = $userdata->user;
+    }
+
+    $gui->close();
+
+    usort($users, fn($a, $b) => strcmp((string)$a->idnumber, (string)$b->idnumber));
+
+    if (empty($users)) {
+        $sheet->setCellValue('A6', 'No students are enrolled in this course or no grades available.');
+        $sheet->getStyle('A6')->applyFromArray([
+            'font' => ['bold' => true, 'italic' => true, 'color' => ['rgb' => 'FF0000']],
+        ]);
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header("Content-Disposition: attachment;filename=\"$filename\"");
+        header('Cache-Control: max-age=0');
+        $writer = new Xlsx($spreadsheet);
+        $writer->save('php://output');
+        exit;
+    }
+
+    // --------------------------------------------------------------------
+    // Header row 1 (assessment names).
+    // --------------------------------------------------------------------
+    $row = 6;
+    $col = 4;
+    foreach ($assessmentitems as $item) {
         $coord = Coordinate::stringFromColumnIndex($col) . $row;
-        // $sheet->setCellValue($coord, 'Total');
-        // $col++;
-        // Add one column per display type.
+        $sheet->setCellValue($coord, $item->get_name());
+        $sheet->getStyle($coord)->applyFromArray($headerstyle);
+        $col += count($this->displaytype);
+        if ($this->export_feedback) {
+            $coord = Coordinate::stringFromColumnIndex($col) . $row;
+            $sheet->setCellValue($coord, get_string('feedback'));
+            $sheet->getStyle($coord)->applyFromArray($headerstyle);
+            $col++;
+        }
+    }
+
+    if ($courseitem) {
         foreach ($this->displaytype as $gradedisplayname => $gradedisplayconst) {
             $coord = Coordinate::stringFromColumnIndex($col) . $row;
             $sheet->setCellValue($coord, get_string($gradedisplayname, 'grades'));
             $col++;
         }
+    }
 
-        // Second header row: weights.
-        $row++;
-        $sheet->setCellValue('A' . $row, 'Student ID');
-        $sheet->getStyle('A' . $row)->applyFromArray($headerstyle);
-        $sheet->setCellValue('B' . $row, 'First name');
-        $sheet->getStyle('B' . $row)->applyFromArray($headerstyle);
-        $sheet->setCellValue('C' . $row, 'Surname');
-        $sheet->getStyle('C' . $row)->applyFromArray($headerstyle);
+    // --------------------------------------------------------------------
+    // Student rows.
+    // --------------------------------------------------------------------
+    $row++;
+    foreach ($users as $user) {
+        $c = 1;
+        $sheet->setCellValue(Coordinate::stringFromColumnIndex($c++) . $row, $user->idnumber ?: '-');
+        $sheet->setCellValue(Coordinate::stringFromColumnIndex($c++) . $row, $user->firstname);
+        $sheet->setCellValue(Coordinate::stringFromColumnIndex($c++) . $row, $user->lastname);
 
-        $col = 4;
         foreach ($assessmentitems as $item) {
-            $weight = $item->aggregationcoef * 100;
-            $coord = Coordinate::stringFromColumnIndex($col) . $row;
-            $sheet->setCellValue($coord, $weight . '%');
-            $sheet->getStyle($coord)->applyFromArray($weightstyle);
-            $col += count($this->displaytype);
-            if ($this->export_feedback) {
-                $coord = Coordinate::stringFromColumnIndex($col) . $row;
-                $sheet->setCellValue($coord, '');
-                $col++;
+            $grade = grade_grade::fetch(['itemid' => $item->id, 'userid' => $user->id]);
+            foreach ($this->displaytype as $gradedisplayconst) {
+                $val = ($grade && $grade->finalgrade !== null)
+                    ? $this->format_grade($grade, $gradedisplayconst)
+                    : '-';
+                $sheet->setCellValue(Coordinate::stringFromColumnIndex($c++) . $row, $val);
             }
-        }
-
-        // Student rows.
-        $row++;
-        $courseitem = grade_item::fetch(['courseid' => $this->course->id, 'itemtype' => 'course']);
-        foreach ($users as $user) {
-            $c = 1;
-            $sheet->setCellValue(Coordinate::stringFromColumnIndex($c++) . $row, $user->idnumber ?: '-');
-            $sheet->setCellValue(Coordinate::stringFromColumnIndex($c++) . $row, $user->firstname);
-            $sheet->setCellValue(Coordinate::stringFromColumnIndex($c++) . $row, $user->lastname);
-
-            foreach ($assessmentitems as $item) {
-                $grade = grade_grade::fetch(['itemid' => $item->id, 'userid' => $user->id]);
-
-                foreach ($this->displaytype as $gradedisplayconst) {
-                    $val = ($grade && $grade->finalgrade !== null)
-                        ? $this->format_grade($grade, $gradedisplayconst)
-                        : '-';
-                    $sheet->setCellValue(Coordinate::stringFromColumnIndex($c++) . $row, $val);
-                }
-
-                if ($this->export_feedback) {
+            if ($this->export_feedback) {
                 $feedbacktext = ($grade && !empty(trim(strip_tags($grade->feedback))))
                     ? trim(strip_tags($grade->feedback))
                     : '-';
                 $sheet->setCellValue(Coordinate::stringFromColumnIndex($c++) . $row, $feedbacktext);
             }
-
-            }
-
-            if ($courseitem) {
-                $coursegrade = grade_grade::fetch(['itemid' => $courseitem->id, 'userid' => $user->id]);
-                foreach ($this->displaytype as $gradedisplayconst) {
-                    $val = ($coursegrade && $coursegrade->finalgrade !== null)
-                        ? $this->format_grade($coursegrade, $gradedisplayconst)
-                        : '-';
-                    $sheet->setCellValue(Coordinate::stringFromColumnIndex($c++) . $row, $val);
-                }
-            }
-            $row++;
         }
 
-        // Output file.
-        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        header("Content-Disposition: attachment;filename=\"$filename\"");
-        $writer = new Xlsx($spreadsheet);
-        $writer->save('php://output');
-        exit;
+        if ($courseitem) {
+            $coursegrade = grade_grade::fetch(['itemid' => $courseitem->id, 'userid' => $user->id]);
+            foreach ($this->displaytype as $gradedisplayconst) {
+                $val = ($coursegrade && $coursegrade->finalgrade !== null)
+                    ? $this->format_grade($coursegrade, $gradedisplayconst)
+                    : '-';
+                $sheet->setCellValue(Coordinate::stringFromColumnIndex($c++) . $row, $val);
+            }
+        }
+        $row++;
     }
+
+    // --------------------------------------------------------------------
+    // Output file.
+    // --------------------------------------------------------------------
+    header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    header("Content-Disposition: attachment;filename=\"$filename\"");
+    $writer = new Xlsx($spreadsheet);
+    $writer->save('php://output');
+    exit;
+}
+
+
 }

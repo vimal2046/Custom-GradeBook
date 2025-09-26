@@ -77,20 +77,61 @@ class grade_export_customexcel extends grade_export {
     $notesboldstyle = ['font' => ['bold' => true]];
 
     // Metadata and notes.
-    $sheet->setCellValue('A1', 'Subject code');
-    $sheet->setCellValue('B1', $this->course->shortname);
-    $sheet->setCellValue('A2', 'Subject name');
-    $sheet->setCellValue('B2', $this->course->fullname);
+    $sheet->setCellValue('A2', 'Subject code');
+    $sheet->setCellValue('B2', $this->course->shortname);
+    $sheet->setCellValue('A3', 'Subject name');
+    $sheet->setCellValue('B3', $this->course->fullname);
+    // Auto-size metadata columns A and B
+    $sheet->getColumnDimension('A')->setWidth(13);
+    $sheet->getColumnDimension('B')->setWidth(13);
+    $sheet->getStyle('A2')->getFont()->setBold(true); // Make label bold
+    $sheet->getStyle('A3')->getFont()->setBold(true);
+
+    $sheet->mergeCells('A5:b5');
+    $sheet->setCellValue('A5', 'Reference Information:');
+    $sheet->getStyle('A5')->applyFromArray($headerstyle);
+    $sheet->setCellValue('B6', 'A dash (-) signifies no submission (automatic fail).');
+    $sheet->getStyle('B6')->applyFromArray($notesstyle);
+    $sheet->setCellValue('B7', 'A zero (0) signifies late submission beyond 2 weeks.');
+    $sheet->getStyle('B7')->applyFromArray($notesstyle);
+    $sheet->setCellValue('B8', 'The scores below are based on marks out of 100 for each assesment item. Weightings and grade scale are provided for reference');
+    $sheet->getStyle('B8')->applyFromArray($notesstyle);
+    $sheet->setCellValue('B9', 'All course totals are rounded to the whole number.');
+    $sheet->getStyle('B9')->applyFromArray($notesboldstyle);
 
 
-    $sheet->setCellValue('D1', 'Please note:');
-    $sheet->getStyle('D1')->applyFromArray($headerstyle);
-    $sheet->setCellValue('D2', 'A dash (-) signifies no submission (automatic fail).');
-    $sheet->getStyle('D2')->applyFromArray($notesstyle);
-    $sheet->setCellValue('D3', 'A zero (0) signifies late submission beyond 2 weeks.');
-    $sheet->getStyle('D3')->applyFromArray($notesstyle);
-    $sheet->setCellValue('D4', 'All course totals are rounded to the whole number.');
-    $sheet->getStyle('D4')->applyFromArray($notesboldstyle);
+    // --------------------------------------------------------------------
+    // Add Grade Letters reference (with fallback to system defaults).
+    // --------------------------------------------------------------------
+    $context = context_course::instance($this->course->id);
+    $letters = grade_get_letters($context);
+
+    // If no grade letters at course level → fallback to system defaults.
+    if (empty($letters)) {
+        $syscontext = context_system::instance();
+        $letters = grade_get_letters($syscontext);
+    }
+
+    if (!empty($letters)) {
+        // Start writing reference at column F row 2.
+        $row = 2;
+        $sheet->setCellValue("K$row", 'Highest');
+        $sheet->setCellValue("L$row", 'Lowest');
+        $sheet->setCellValue("M$row", 'Letter');
+        $sheet->getStyle("K$row:M$row")->getFont()->setBold(true);
+
+        // Loop through grade letters.
+        $prevboundary = 100.00;
+        foreach ($letters as $lowerboundary => $letter) {
+            $row++;
+            $sheet->setCellValue("K$row", $prevboundary . '%');
+            $sheet->setCellValue("L$row", $lowerboundary . '%');
+            $sheet->setCellValue("M$row", $letter);
+
+            $prevboundary = $lowerboundary;
+        }
+    }
+
 
     // --------------------------------------------------------------------
     // Handle selected grade items.
@@ -163,31 +204,78 @@ class grade_export_customexcel extends grade_export {
         exit;
     }
 
-    // --------------------------------------------------------------------
-    // Header row 1 (assessment names).
-    // --------------------------------------------------------------------
-    $row = 6;
-    $col = 4;
-    foreach ($assessmentitems as $item) {
-        $coord = Coordinate::stringFromColumnIndex($col) . $row;
-        $sheet->setCellValue($coord, $item->get_name());
-        $sheet->getStyle($coord)->applyFromArray($headerstyle);
-        $col += count($this->displaytype);
-        if ($this->export_feedback) {
-            $coord = Coordinate::stringFromColumnIndex($col) . $row;
-            $sheet->setCellValue($coord, get_string('feedback'));
-            $sheet->getStyle($coord)->applyFromArray($headerstyle);
-            $col++;
-        }
-    }
+// --------------------------------------------------------------------
+// Header row 1 (assessment names).
+// --------------------------------------------------------------------
+$row = 18;
+$col = 4;
 
-    if ($courseitem) {
-        foreach ($this->displaytype as $gradedisplayname => $gradedisplayconst) {
-            $coord = Coordinate::stringFromColumnIndex($col) . $row;
-            $sheet->setCellValue($coord, get_string($gradedisplayname, 'grades'));
-            $col++;
-        }
+// Student identity headers (A, B, C).
+$sheet->setCellValue('A' . $row, 'Student ID');
+$sheet->getStyle('A' . $row)->applyFromArray($headerstyle);
+
+$sheet->setCellValue('B' . $row, 'First name');
+$sheet->getStyle('B' . $row)->applyFromArray($headerstyle);
+
+$sheet->setCellValue('C' . $row, 'Surname');
+$sheet->getStyle('C' . $row)->applyFromArray($headerstyle);
+
+foreach ($assessmentitems as $item) {
+    $coord = Coordinate::stringFromColumnIndex($col) . $row;
+    $sheet->setCellValue($coord, $item->get_name());
+    $sheet->getStyle($coord)->applyFromArray($headerstyle);
+
+    // ✅ Force width + wrap for this column
+    $colletter = Coordinate::stringFromColumnIndex($col);
+    $sheet->getColumnDimension($colletter)->setAutoSize(false);
+    $sheet->getColumnDimension($colletter)->setWidth(15);
+    $sheet->getStyle($colletter . $row)->getAlignment()
+        ->setWrapText(true)
+        ->setHorizontal(Alignment::HORIZONTAL_CENTER)
+        ->setVertical(Alignment::VERTICAL_CENTER);
+
+    $col += count($this->displaytype);
+
+    if ($this->export_feedback) {
+        $coord = Coordinate::stringFromColumnIndex($col) . $row;
+        $sheet->setCellValue($coord, get_string('feedback'));
+        $sheet->getStyle($coord)->applyFromArray($headerstyle);
+
+        // ✅ Also apply for feedback column
+        $colletter = Coordinate::stringFromColumnIndex($col);
+        $sheet->getColumnDimension($colletter)->setAutoSize(false);
+        $sheet->getColumnDimension($colletter)->setWidth(15);
+        $sheet->getStyle($colletter . $row)->getAlignment()
+            ->setWrapText(true)
+            ->setHorizontal(Alignment::HORIZONTAL_CENTER)
+            ->setVertical(Alignment::VERTICAL_CENTER);
+
+        $col++;
     }
+}
+
+if ($courseitem) {
+    foreach ($this->displaytype as $gradedisplayname => $gradedisplayconst) {
+        $coord = Coordinate::stringFromColumnIndex($col) . $row;
+        $sheet->setCellValue($coord, get_string($gradedisplayname, 'grades'));
+        $sheet->getStyle($coord)->applyFromArray($headerstyle);
+
+        // ✅ Force width + wrap for course total columns
+        $colletter = Coordinate::stringFromColumnIndex($col);
+        $sheet->getColumnDimension($colletter)->setAutoSize(false);
+        $sheet->getColumnDimension($colletter)->setWidth(15);
+        $sheet->getStyle($colletter . $row)->getAlignment()
+            ->setWrapText(true)
+            ->setHorizontal(Alignment::HORIZONTAL_CENTER)
+            ->setVertical(Alignment::VERTICAL_CENTER);
+
+        $col++;
+    }
+}
+
+// Allow row 18 height to adjust automatically
+$sheet->getRowDimension(18)->setRowHeight(-1);
+
 
     // --------------------------------------------------------------------
     // Student rows.

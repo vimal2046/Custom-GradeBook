@@ -24,13 +24,10 @@
 
 require_once('../../../config.php');
 require_once($CFG->dirroot . '/grade/export/lib.php');
-require_once($CFG->dirroot . '/grade/export/customexcel/classes/exporter.php'); // Custom exporter class.
+require_once($CFG->dirroot . '/grade/export/grade_export_form.php');
+require_once($CFG->dirroot . '/grade/export/customexcel/classes/exporter.php');
 
-$id             = required_param('id', PARAM_INT);
-$groupid        = optional_param('groupid', 0, PARAM_INT);
-$itemids        = optional_param_array('itemids', [], PARAM_INT);
-$exportfeedback = optional_param('exportfeedback', 0, PARAM_BOOL);
-$onlyactive     = optional_param('onlyactive', 0, PARAM_BOOL);
+$id = required_param('id', PARAM_INT);
 
 if (!$course = $DB->get_record('course', ['id' => $id])) {
     throw new moodle_exception('invalidcourseid');
@@ -42,10 +39,80 @@ $context = context_course::instance($id);
 require_capability('moodle/grade:export', $context);
 require_capability('gradeexport/customexcel:view', $context);
 
-// Convert itemids array to string.
-$itemlist = !empty($itemids) ? implode(',', $itemids) : '';
+// Build the same form used in index.php.
+$formoptions = [
+    'publishing' => true,
+    'simpleui' => true,
+    'multipledisplaytypes' => true,
+];
+$mform = new grade_export_form(null, $formoptions);
 
-// Create exporter and trigger download.
-$export = new grade_export_customexcel($course, $groupid, $itemlist, $exportfeedback, $onlyactive);
+$formdata = $mform->get_data();
+
+if (!$formdata) {
+    // Support direct GET (publishing / dump style). Try to build formdata from URL params.
+    $itemids = optional_param('itemids', '', PARAM_RAW);
+    if ($itemids === '') {
+        // No form data and no GET itemids — go back to index page.
+        redirect(new moodle_url('/grade/export/customexcel/index.php', ['id' => $id]));
+    }
+
+    $exportfeedback = optional_param('export_feedback', 0, PARAM_BOOL);
+    $onlyactive     = optional_param('export_onlyactive', 0, PARAM_BOOL);
+    $displaytype    = optional_param('displaytype', $CFG->grade_export_displaytype, PARAM_RAW);
+    $decimalpoints  = optional_param('decimalpoints', $CFG->grade_export_decimalpoints, PARAM_INT);
+
+    // Use core helper to build a full $formdata object from raw GET values.
+    $formdata = grade_export::export_bulk_export_data(
+        $id,
+        $itemids,
+        $exportfeedback,
+        $onlyactive,
+        $displaytype,
+        $decimalpoints
+    );
+} else {
+    // Normal form POST path. Normalize display types and itemids.
+
+    // 1) display types:
+    if (!empty($formdata->display)) {
+        if (is_array($formdata->display)) {
+            // The form returns an associative array 'real' => GRADE_DISPLAY_TYPE_REAL, etc.
+            $formdata->displaytype = $formdata->display;
+        } else {
+            // If it's a string for some reason, convert like core expects.
+            $formdata->displaytype = grade_export::convert_flat_displaytypes_to_array($formdata->display);
+        }
+    }
+
+    // 2) itemids: make a clean array of integer ids or -1 (all)
+    if (!empty($formdata->itemids)) {
+        if (is_array($formdata->itemids)) {
+            // Form returns itemids as itemids[123] => 1. Keep keys that are truthy.
+            $ids = [];
+            foreach ($formdata->itemids as $key => $val) {
+                if (!empty($val)) {
+                    $ids[] = (int)$key;
+                }
+            }
+            // If nothing selected keep -1 (consistent with core behaviour).
+            $formdata->itemids = empty($ids) ? -1 : $ids;
+        } else {
+            // If string like "1,2,3" or "-1":
+            if ($formdata->itemids === '-1') {
+                $formdata->itemids = -1;
+            } else {
+                $parts = array_filter(array_map('trim', explode(',', $formdata->itemids)));
+                $formdata->itemids = array_map('intval', $parts);
+            }
+        }
+    } else {
+        // No explicit itemids in form — default to -1 (all).
+        $formdata->itemids = -1;
+    }
+}
+
+// Create and run exporter using the full $formdata (this populates $this->displaytype, decimals, etc).
+$export = new grade_export_customexcel($course, 0, $formdata);
 $export->print_grades();
 exit;

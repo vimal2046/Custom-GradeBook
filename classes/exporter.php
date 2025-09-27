@@ -1,5 +1,5 @@
 <?php
-// This file is part of Moodle - http://moodle.org/
+// This file is part of Moodle - http://moodle.org/.
 //
 // Moodle is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -18,17 +18,12 @@
  * Custom Excel grade exporter.
  *
  * @package    gradeexport_customexcel
- * @copyright  2025 AC University
- * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 defined('MOODLE_INTERNAL') || die();
 
-global $CFG;
-require_once($CFG->libdir . '/gradelib.php');
 require_once($CFG->dirroot . '/grade/export/lib.php');
 require_once($CFG->dirroot . '/grade/lib.php');
-
 // Load PhpSpreadsheet via composer vendor autoloader.
 $vendorautoloader = __DIR__ . '/../vendor/autoload.php';
 if (file_exists($vendorautoloader)) {
@@ -40,7 +35,7 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
-
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 /**
  * Custom Excel grade export class.
  *
@@ -49,28 +44,22 @@ use PhpOffice\PhpSpreadsheet\Style\Border;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class grade_export_customexcel extends grade_export {
+    public $plugin = 'customexcel';
+    protected $formdata;
 
-    /**
-     * Constructor.
-     *
-     * @param stdClass $course The course.
-     * @param int $groupid The group ID.
-     * @param string|null $itemlist Item list.
-     * @param bool $exportfeedback Whether to export feedback.
-     * @param bool $onlyactive Whether to include only active users.
-     */
+    public function __construct($course, $groupid, $formdata) {
+        parent::__construct($course, $groupid, $formdata);
+        $this->formdata = $formdata;
+    }
 
     /**
      * Generate and output the Excel file with grades.
-     *
-     * @return void
      */
     public function print_grades() {
         global $DB;
 
         $filename = clean_filename("grades-{$this->course->shortname}.xlsx");
 
-        // Create PhpSpreadsheet workbook and worksheet.
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Results template sample');
@@ -84,214 +73,392 @@ class grade_export_customexcel extends grade_export {
                 'startColor' => ['rgb' => 'F8CBAD'],
             ],
         ];
-        $weightstyle = ['alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]];
         $notesstyle = ['font' => ['italic' => true]];
         $notesboldstyle = ['font' => ['bold' => true]];
 
         // Metadata and notes.
-        $sheet->setCellValue('A1', 'Subject code');
-        $sheet->setCellValue('B1', $this->course->shortname);
+        $sheet->setCellValue('A2', 'Subject code');
+        $sheet->setCellValue('B2', $this->course->shortname);
+        $sheet->setCellValue('A3', 'Subject name');
+        $sheet->setCellValue('B3', $this->course->fullname);
+    // Auto-size metadata columns A and B
+        $sheet->getColumnDimension('A')->setWidth(13);
+        $sheet->getColumnDimension('B')->setWidth(13);
+        $sheet->getStyle('A2')->getFont()->setBold(true);
+        $sheet->getStyle('A3')->getFont()->setBold(true);
 
-        $sheet->setCellValue('A2', 'Subject name');
-        $sheet->setCellValue('B2', $this->course->fullname);
+        $sheet->mergeCells('A5:B5');
+        $sheet->setCellValue('A5', 'Reference Information:');
+        $sheet->getStyle('A5')->applyFromArray($headerstyle);
+        $sheet->setCellValue('B6', 'A dash (-) signifies no submission (automatic fail).');
+        $sheet->getStyle('B6')->applyFromArray($notesstyle);
+        $sheet->setCellValue('B7', 'A zero (0) signifies late submission beyond 2 weeks.');
+        $sheet->getStyle('B7')->applyFromArray($notesstyle);
+        $sheet->setCellValue('B8', 'The scores below are based on marks out of 100 for each assesment item. Weightings and grade scale are provided for reference');
+        $sheet->getStyle('B8')->applyFromArray($notesstyle);
+        $sheet->setCellValue('B9', 'All course totals are rounded to the whole number.');
+        $sheet->getStyle('B9')->applyFromArray($notesboldstyle);
 
-        $sheet->setCellValue('A3', 'Delivery mode');
-        $sheet->setCellValue('B3', '---');
-
-        $sheet->setCellValue('A4', 'Campus');
-        $sheet->setCellValue('B4', '---');
-
-        $sheet->setCellValue('D1', 'Please note:');
-        $sheet->getStyle('D1')->applyFromArray($headerstyle);
-        $sheet->setCellValue(
-            'D2',
-            'A dash (-) signifies a student that they did not submit the assessment and automatically fail the subject.'
-        );
-        $sheet->getStyle('D2')->applyFromArray($notesstyle);
-        $sheet->setCellValue(
-            'D3',
-            'A zero (0) signifies a student has submitted an assessment but it was beyond the 2 week late assessment '
-            . 'submission. They are still eligible to pass the subject if their overall total is greater than 50%.'
-        );
-        $sheet->getStyle('D3')->applyFromArray($notesstyle);
-        $sheet->setCellValue('D4', 'All course totals are rounded to the whole number.');
-        $sheet->getStyle('D4')->applyFromArray($notesboldstyle);
-        // Fetch items and students.
-        $items = grade_item::fetch_all(['courseid' => $this->course->id]);
+        // --------------------------------------------------------------------
+        // Grade Letters reference (single-column scale in A11 / B11↓)
+        // --------------------------------------------------------------------
         $context = context_course::instance($this->course->id);
-
-        $studentrole = $DB->get_record('role', ['shortname' => 'student']);
-        $users = [];
-        if ($studentrole) {
-            $users = get_role_users($studentrole->id, $context);
+        $letters = grade_get_letters($context);
+        if (empty($letters)) {
+            $syscontext = context_system::instance();
+            $letters = grade_get_letters($syscontext);
         }
 
-        // Sort users by student number (idnumber).
-        usort($users, function($a, $b) {
-            return strcmp((string)$a->idnumber, (string)$b->idnumber);
-        });
-        // If no students → write message and exit.
-        if (empty($users)) {
-            $sheet->setCellValue('A6', 'No students are enrolled in this course or no grades available.');
+        if (!empty($letters)) {
+            // Place "Grade scale" at A11.
+            $row = 11;
+            $sheet->setCellValue("A{$row}", 'Grade scale:');
+            $sheet->getStyle("A{$row}")->applyFromArray($headerstyle);;
+
+            // Keep previous upper boundary (start at 100).
+            $prevboundary = 100.0;
+
+            // Small helper to nicely format numbers (no decimals when whole).
+            $formatBound = function($v) {
+                if (is_numeric($v) && floor($v) == $v) {
+                    return (int)$v;
+                }
+                return number_format($v, 2);
+            };
+
+            foreach ($letters as $lowerboundary => $letter) {
+                // Grade strings go into column B (starting same row).
+                $sheet->setCellValue("B{$row}", "{$letter}: " .
+                    $formatBound((float)$lowerboundary) . '-' . $formatBound($prevboundary));
+
+                // Next row for next grade.
+                $row++;
+                $prevboundary = (float)$lowerboundary;
+            }
+
+            // Optional: auto-size column B for text width.
+           // $sheet->getColumnDimension('B')->setAutoSize(true);
+        }
+
+
+        // --------------------------------------------------------------------
+        // Handle selected grade items
+        // --------------------------------------------------------------------
+        $selecteditemids = [];
+        if (!empty($this->formdata->itemids)) {
+            if (is_array($this->formdata->itemids)) {
+                $selecteditemids = $this->formdata->itemids;
+            } else {
+                $selecteditemids = explode(',', $this->formdata->itemids);
+            }
+        }
+
+        $assessmentitems = [];
+        $courseitem = null;
+        if (!empty($selecteditemids)) {
+            foreach ($selecteditemids as $itemid) {
+                $item = grade_item::fetch(['id' => $itemid, 'courseid' => $this->course->id]);
+                if ($item && $item->itemtype === 'mod') {
+                    $assessmentitems[] = $item;
+                }
+                if ($item && $item->itemtype === 'course') {
+                    $courseitem = $item;
+                }
+            }
+        }
+
+        if (empty($assessmentitems) && empty($courseitem)) {
+            $sheet->setCellValue('A6', 'No grade items selected for export.');
             $sheet->getStyle('A6')->applyFromArray([
                 'font' => ['bold' => true, 'italic' => true, 'color' => ['rgb' => 'FF0000']],
             ]);
-
             header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
             header("Content-Disposition: attachment;filename=\"$filename\"");
             header('Cache-Control: max-age=0');
-
             $writer = new Xlsx($spreadsheet);
             $writer->save('php://output');
             exit;
         }
 
-        // Header row 1 (assessments, total, grade).
-        $row = 6;  // Start at row 6.
-        $col = 4; // Column D.
-        $assessmentitems = [];
-        foreach ($items as $item) {
-            if ($item->itemtype === 'mod') {
-                $coord = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col) . $row;
-                $sheet->setCellValue($coord, $item->get_name());
-                $sheet->getStyle($coord)->applyFromArray($headerstyle);
-                $assessmentitems[] = $item;
-                $col++;
-            }
+        // --------------------------------------------------------------------
+        // Users
+        // --------------------------------------------------------------------
+        $users = [];
+        $gui = new graded_users_iterator($this->course, $assessmentitems, $this->groupid);
+        $gui->require_active_enrolment($this->onlyactive);
+        $gui->init();
+        while ($userdata = $gui->next_user()) {
+            $users[] = $userdata->user;
         }
-        $coord = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col) . $row;
-        $sheet->setCellValue($coord, 'Total');
-        $sheet->getStyle($coord)->applyFromArray($headerstyle);
-        $col++;
-        $coord = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col) . $row;
-        $sheet->setCellValue($coord, 'Grade');
-        $sheet->getStyle($coord)->applyFromArray($headerstyle);
+        $gui->close();
 
-        // Enable text wrapping on row 6 (assessment names row).
-        $sheet->getStyle('A6:' . \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col) . '6')
-            ->getAlignment()
-            ->setWrapText(true)
-            ->setVertical(Alignment::VERTICAL_CENTER);
+        usort($users, fn($a, $b) => strcmp((string)$a->idnumber, (string)$b->idnumber));
 
-        // Increase row height for visibility.
-        $sheet->getRowDimension(6)->setRowHeight(-1);
-        // Header row 2 (Student ID + weightings).
-        $row++;
-        $sheet->setCellValue('A' . $row, 'Student ID');
-        $sheet->getStyle('A' . $row)->applyFromArray($headerstyle);
-        $sheet->setCellValue('B' . $row, 'First name');
-        $sheet->getStyle('B' . $row)->applyFromArray($headerstyle);
-        $sheet->setCellValue('C' . $row, 'Surname');
-        $sheet->getStyle('C' . $row)->applyFromArray($headerstyle);
-
-        $col = 4;
-        $totalweight = 0;
-        foreach ($assessmentitems as $item) {
-            $weight = $item->aggregationcoef * 100;
-            $totalweight += $weight;
-            $coord = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col) . $row;
-            $sheet->setCellValue($coord, $weight . '%');
-            $sheet->getStyle($coord)->applyFromArray($weightstyle);
-            $col++;
-        }
-        $coord = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col) . $row;
-        $sheet->setCellValue($coord, $totalweight . '%');
-        $sheet->getStyle($coord)->applyFromArray($weightstyle);
-        $col++;
-        $coord = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col) . $row;
-        $sheet->setCellValue($coord, '');
-        $sheet->getStyle($coord)->applyFromArray($weightstyle);
-        // Set column widths.
-        $sheet->getColumnDimension('A')->setWidth(14);
-        $sheet->getColumnDimension('B')->setWidth(13);
-        $sheet->getColumnDimension('C')->setWidth(13);
-
-
-
-        // $col still points to the last header column index.
-        $lastcolletter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col);
-
-        // 1. Borders only for assessment names row (D6 → lastcol6).
-        $sheet->getStyle("D6:{$lastcolletter}6")->applyFromArray([
-            'borders' => [
-                'allBorders' => [
-                    'borderStyle' => Border::BORDER_THIN,
-                    'color' => ['rgb' => '000000'],
-                ],
-            ],
-        ]);
-
-        // 2. Borders for the weights + ID headers row (A7 → lastcol7).
-        $sheet->getStyle("A7:{$lastcolletter}7")->applyFromArray([
-            'borders' => [
-                'allBorders' => [
-                    'borderStyle' => Border::BORDER_THIN,
-                    'color' => ['rgb' => '000000'],
-                ],
-            ],
-        ]);
-
-        for ($i = 4; $i <= $col; $i++) {
-            $colletter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i);
-            $sheet->getColumnDimension($colletter)->setWidth(13);
-        }
-        // Student rows.
-        $row++;
-        $courseitem = grade_item::fetch(['courseid' => $this->course->id, 'itemtype' => 'course']);
-
-        foreach ($users as $user) {
-            $studentid = !empty($user->idnumber) ? $user->idnumber : '-';
-            $sheet->setCellValue('A' . $row, $studentid);
-            $sheet->setCellValue('B' . $row, $user->firstname);
-            $sheet->setCellValue('C' . $row, $user->lastname);
-
-            $col = 4;
-            foreach ($assessmentitems as $item) {
-                $coord = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col) . $row;
-                $grade = grade_grade::fetch(['itemid' => $item->id, 'userid' => $user->id]);
-                $sheet->setCellValue($coord,
-                    ($grade && $grade->finalgrade !== null) ? round($grade->finalgrade, 2) : '-'
-                );
-                $col++;
-            }
-
-            if ($courseitem) {
-                $coursegrade = grade_grade::fetch(['itemid' => $courseitem->id, 'userid' => $user->id]);
-                $coord = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col) . $row;
-                $sheet->setCellValue($coord,
-                    ($coursegrade && $coursegrade->finalgrade !== null) ? round($coursegrade->finalgrade, 2) : '-'
-                );
-                $col++;
-                $coord = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col) . $row;
-                $sheet->setCellValue($coord,
-                    ($coursegrade && $coursegrade->finalgrade !== null)
-                        ? grade_format_gradevalue_letter($coursegrade->finalgrade, $courseitem)
-                        : '-'
-                );
-            }
-            $row++;
-        }
-            $lastcolletter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col);
-            $lastrow = $row - 1; // last student row filled
-
-            // Apply only an outline border around the whole grade box (A6 → last student row).
-            $sheet->getStyle("A7:{$lastcolletter}{$lastrow}")->applyFromArray([
-                'borders' => [
-                    'outline' => [
-                        'borderStyle' => Border::BORDER_THIN,
-                        'color' => ['rgb' => '000000'],
-                    ],
-                ],
+        if (empty($users)) {
+            $sheet->setCellValue('A6', 'No students are enrolled in this course or no grades available.');
+            $sheet->getStyle('A6')->applyFromArray([
+                'font' => ['bold' => true, 'italic' => true, 'color' => ['rgb' => 'FF0000']],
             ]);
+            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            header("Content-Disposition: attachment;filename=\"$filename\"");
+            header('Cache-Control: max-age=0');
+            $writer = new Xlsx($spreadsheet);
+            $writer->save('php://output');
+            exit;
+        }
+// --------------------------------------------------------------------
+// Header row
+// --------------------------------------------------------------------
+$row = 18;
+$col = 4;
 
-        // Output.
+// ✅ Border style for headers
+$borderstyle = [
+    'borders' => [
+        'allBorders' => [
+            'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+            'color' => ['rgb' => '000000'],
+        ],
+    ],
+];
 
+// Student identity headers
+$sheet->setCellValue('A' . $row, 'Student ID');
+$sheet->getStyle('A' . $row)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
+$sheet->getColumnDimension('A')->setWidth(15);
+$sheet->getStyle('A' . $row)->getAlignment()->setWrapText(true);
+
+$sheet->setCellValue('B' . $row, 'First name');
+$sheet->getStyle('B' . $row)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
+$sheet->getColumnDimension('B')->setWidth(15);
+$sheet->getStyle('B' . $row)->getAlignment()->setWrapText(true);
+
+$sheet->setCellValue('C' . $row, 'Surname');
+$sheet->getStyle('C' . $row)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
+$sheet->getColumnDimension('C')->setWidth(15);
+$sheet->getStyle('C' . $row)->getAlignment()->setWrapText(true);
+
+// Assignments
+foreach ($assessmentitems as $item) {
+    $startcol = $col;
+
+    // Subcolumns (Real, Percentage, Letter, etc.)
+    foreach ($this->displaytype as $gradedisplayname => $gradedisplayconst) {
+        $coord = Coordinate::stringFromColumnIndex($col) . $row;
+        $sheet->setCellValue($coord, get_string($gradedisplayname, 'grades'));
+        $sheet->getStyle($coord)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
+
+        // ✅ Apply fixed width + wrap
+        $letter = Coordinate::stringFromColumnIndex($col);
+        $sheet->getColumnDimension($letter)->setWidth(15);
+        $sheet->getStyle($coord)->getAlignment()->setWrapText(true);
+
+        $col++;
+    }
+
+    // Merge across subcolumns → assignment name
+    $startcolletter = Coordinate::stringFromColumnIndex($startcol);
+    $endcolletter   = Coordinate::stringFromColumnIndex($col - 1);
+    $sheet->mergeCells("{$startcolletter}{$row}:{$endcolletter}{$row}");
+    $sheet->setCellValue($startcolletter . $row, $item->get_name());
+    $sheet->getStyle("{$startcolletter}{$row}:{$endcolletter}{$row}")
+        ->applyFromArray($headerstyle)
+        ->applyFromArray($borderstyle)
+        ->getAlignment()->setWrapText(true);
+
+    if ($this->export_feedback) {
+        $coord = Coordinate::stringFromColumnIndex($col) . $row;
+        $sheet->setCellValue($coord, get_string('feedback'));
+        $sheet->getStyle($coord)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
+        $letter = Coordinate::stringFromColumnIndex($col);
+        $sheet->getColumnDimension($letter)->setWidth(15);
+        $sheet->getStyle($coord)->getAlignment()->setWrapText(true);
+        $col++;
+    }
+}
+
+if ($courseitem) {
+    $startcol = $col;
+    foreach ($this->displaytype as $gradedisplayname => $gradedisplayconst) {
+        $coord = Coordinate::stringFromColumnIndex($col) . $row;
+        $sheet->setCellValue($coord, get_string($gradedisplayname, 'grades'));
+        $sheet->getStyle($coord)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
+
+        // ✅ Apply fixed width + wrap
+        $letter = Coordinate::stringFromColumnIndex($col);
+        $sheet->getColumnDimension($letter)->setWidth(15);
+        $sheet->getStyle($coord)->getAlignment()->setWrapText(true);
+
+        $col++;
+    }
+    $startcolletter = Coordinate::stringFromColumnIndex($startcol);
+    $endcolletter   = Coordinate::stringFromColumnIndex($col - 1);
+    $sheet->mergeCells("{$startcolletter}{$row}:{$endcolletter}{$row}");
+    $sheet->setCellValue($startcolletter . $row, get_string('coursetotal', 'grades'));
+    $sheet->getStyle("{$startcolletter}{$row}:{$endcolletter}{$row}")
+        ->applyFromArray($headerstyle)
+        ->applyFromArray($borderstyle)
+        ->getAlignment()->setWrapText(true);
+}
+
+// ✅ Grade column
+$coord = Coordinate::stringFromColumnIndex($col) . $row;
+$sheet->setCellValue($coord, 'Grade');
+$sheet->getStyle($coord)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
+$sheet->getColumnDimension(Coordinate::stringFromColumnIndex($col))->setWidth(15);
+$sheet->getStyle($coord)->getAlignment()->setWrapText(true);
+
+$gradecolindex = $col;
+$col++;
+
+$sheet->getRowDimension(18)->setRowHeight(-1);
+
+
+        // --------------------------------------------------------------------
+        // Student rows
+        // --------------------------------------------------------------------
+        $row++;
+        foreach ($users as $user) {
+            $c = 1;
+        // Student ID
+        $coord = Coordinate::stringFromColumnIndex($c) . $row;
+        $sheet->setCellValue($coord, $user->idnumber ?: '-');
+        $sheet->getStyle($coord)->getAlignment()
+            ->setHorizontal(Alignment::HORIZONTAL_CENTER)
+            ->setVertical(Alignment::VERTICAL_CENTER);
+        $c++;
+
+        // First name
+        $coord = Coordinate::stringFromColumnIndex($c) . $row;
+        $sheet->setCellValue($coord, $user->firstname);
+        $sheet->getStyle($coord)->getAlignment()
+            ->setHorizontal(Alignment::HORIZONTAL_CENTER)
+            ->setVertical(Alignment::VERTICAL_CENTER);
+        $c++;
+
+        // Surname
+        $coord = Coordinate::stringFromColumnIndex($c) . $row;
+        $sheet->setCellValue($coord, $user->lastname);
+        $sheet->getStyle($coord)->getAlignment()
+            ->setHorizontal(Alignment::HORIZONTAL_CENTER)
+            ->setVertical(Alignment::VERTICAL_CENTER);
+        $c++;
+
+
+    foreach ($assessmentitems as $item) {
+        $grade = grade_grade::fetch(['itemid' => $item->id, 'userid' => $user->id]);
+        foreach ($this->displaytype as $gradedisplayconst) {
+            $val = ($grade && $grade->finalgrade !== null)
+                ? $this->format_grade($grade, $gradedisplayconst)
+                : '-';
+            $coord = Coordinate::stringFromColumnIndex($c) . $row;
+            $sheet->setCellValue($coord, $val);
+
+            // ✅ Center align grade values
+            $sheet->getStyle($coord)->getAlignment()
+                ->setHorizontal(Alignment::HORIZONTAL_CENTER)
+                ->setVertical(Alignment::VERTICAL_CENTER);
+
+                // ✅ If value is "-" → red background
+            if ($val === '-') {
+                $sheet->getStyle($coord)->getFill()->setFillType(Fill::FILL_SOLID)
+                    ->getStartColor()->setRGB('FF9999'); // light red
+            }
+
+            $c++;
+        }
+        if ($this->export_feedback) {
+            $feedbacktext = ($grade && !empty(trim(strip_tags($grade->feedback))))
+                ? trim(strip_tags($grade->feedback))
+                : '-';
+            $coord = Coordinate::stringFromColumnIndex($c) . $row;
+            $sheet->setCellValue($coord, $feedbacktext);
+            // (Feedback can stay left-aligned, so no centering here unless you want)
+            $c++;
+        }
+    }
+
+    $finalpercent = null;
+    if ($courseitem) {
+        $coursegrade = grade_grade::fetch(['itemid' => $courseitem->id, 'userid' => $user->id]);
+        foreach ($this->displaytype as $gradedisplayconst) {
+            $val = ($coursegrade && $coursegrade->finalgrade !== null)
+                ? $this->format_grade($coursegrade, $gradedisplayconst)
+                : '-';
+            $coord = Coordinate::stringFromColumnIndex($c) . $row;
+            $sheet->setCellValue($coord, $val);
+
+            // ✅ Center align course total grades
+            $sheet->getStyle($coord)->getAlignment()
+                ->setHorizontal(Alignment::HORIZONTAL_CENTER)
+                ->setVertical(Alignment::VERTICAL_CENTER);
+
+                if ($val === '-') {
+                $sheet->getStyle($coord)->getFill()->setFillType(Fill::FILL_SOLID)
+                    ->getStartColor()->setRGB('FF9999'); // light red
+            }
+
+            $c++;
+        }
+
+        if ($coursegrade && $coursegrade->finalgrade !== null) {
+            $finalpercent = floatval($coursegrade->finalgrade / $courseitem->grademax * 100);
+        }
+    }
+
+    // ✅ Final Grade letter
+    $gradecoord = Coordinate::stringFromColumnIndex($gradecolindex) . $row;
+    $sheet->setCellValue($gradecoord, $finalpercent !== null
+        ? $this->get_grade_letter($finalpercent)
+        : '-');
+
+    $sheet->getStyle($gradecoord)->getAlignment()
+        ->setHorizontal(Alignment::HORIZONTAL_CENTER)
+        ->setVertical(Alignment::VERTICAL_CENTER);
+
+    $row++;
+}
+
+        // ✅ Apply thin border to the entire used range
+        $lastcol = Coordinate::stringFromColumnIndex($col - 1);
+        $lastrow = $row - 1; // because loop already incremented after last student
+
+        $sheet->getStyle("A18:{$lastcol}{$lastrow}")->applyFromArray([
+            'borders' => [
+                'allBorders' => [
+                    'borderStyle' => Border::BORDER_THIN,
+                    'color' => ['rgb' => '000000'],
+                ],
+            ],
+        ]);
+
+        // --------------------------------------------------------------------
+        // Output
+        // --------------------------------------------------------------------
         header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         header("Content-Disposition: attachment;filename=\"$filename\"");
-        header('Cache-Control: max-age=0');
-
         $writer = new Xlsx($spreadsheet);
         $writer->save('php://output');
         exit;
     }
+
+    /**
+     * Convert percentage to grade letter.
+     */
+    protected function get_grade_letter($percentage) {
+        $context = context_course::instance($this->course->id);
+        $letters = grade_get_letters($context);
+        if (empty($letters)) {
+            $letters = grade_get_letters(context_system::instance());
+        }
+        foreach ($letters as $lowerboundary => $letter) {
+            if ($percentage >= $lowerboundary) {
+                return $letter;
+            }
+        }
+        return '-';
+    }
 }
+
+
+//ToDo : want to show a color in grade as red and show F (Non submission) if not submitted...

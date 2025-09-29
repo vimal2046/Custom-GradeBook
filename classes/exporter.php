@@ -158,9 +158,11 @@ class grade_export_customexcel extends grade_export {
         if (!empty($selecteditemids)) {
             foreach ($selecteditemids as $itemid) {
                 $item = grade_item::fetch(['id' => $itemid, 'courseid' => $this->course->id]);
-                if ($item && $item->itemtype === 'mod') {
-                    $assessmentitems[] = $item;
-                }
+                if ($item && $item->itemtype === 'mod' && $item->itemnumber == 0) {
+                // Only include overall activity grades (no sub-parts).
+                $assessmentitems[] = $item;
+            }
+
                 if ($item && $item->itemtype === 'course') {
                     $courseitem = $item;
                 }
@@ -212,7 +214,7 @@ class grade_export_customexcel extends grade_export {
 $row = 18;
 $col = 4;
 
-// ✅ Border style for headers
+//  Border style for headers
 $borderstyle = [
     'borders' => [
         'allBorders' => [
@@ -248,7 +250,7 @@ foreach ($assessmentitems as $item) {
         $sheet->setCellValue($coord, get_string($gradedisplayname, 'grades'));
         $sheet->getStyle($coord)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
 
-        // ✅ Apply fixed width + wrap
+        //  Apply fixed width + wrap
         $letter = Coordinate::stringFromColumnIndex($col);
         $sheet->getColumnDimension($letter)->setWidth(15);
         $sheet->getStyle($coord)->getAlignment()->setWrapText(true);
@@ -284,7 +286,7 @@ if ($courseitem) {
         $sheet->setCellValue($coord, get_string($gradedisplayname, 'grades'));
         $sheet->getStyle($coord)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
 
-        // ✅ Apply fixed width + wrap
+        //  Apply fixed width + wrap
         $letter = Coordinate::stringFromColumnIndex($col);
         $sheet->getColumnDimension($letter)->setWidth(15);
         $sheet->getStyle($coord)->getAlignment()->setWrapText(true);
@@ -301,7 +303,7 @@ if ($courseitem) {
         ->getAlignment()->setWrapText(true);
 }
 
-// ✅ Grade column
+//  Grade column
 $coord = Coordinate::stringFromColumnIndex($col) . $row;
 $sheet->setCellValue($coord, 'Grade');
 $sheet->getStyle($coord)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
@@ -354,12 +356,12 @@ $sheet->getRowDimension(18)->setRowHeight(-1);
             $coord = Coordinate::stringFromColumnIndex($c) . $row;
             $sheet->setCellValue($coord, $val);
 
-            // ✅ Center align grade values
+            //  Center align grade values
             $sheet->getStyle($coord)->getAlignment()
                 ->setHorizontal(Alignment::HORIZONTAL_CENTER)
                 ->setVertical(Alignment::VERTICAL_CENTER);
 
-                // ✅ If value is "-" → red background
+                // If value is "-" → red background
             if ($val === '-') {
                 $sheet->getStyle($coord)->getFill()->setFillType(Fill::FILL_SOLID)
                     ->getStartColor()->setRGB('FF9999'); // light red
@@ -388,7 +390,7 @@ $sheet->getRowDimension(18)->setRowHeight(-1);
             $coord = Coordinate::stringFromColumnIndex($c) . $row;
             $sheet->setCellValue($coord, $val);
 
-            // ✅ Center align course total grades
+            //  Center align course total grades
             $sheet->getStyle($coord)->getAlignment()
                 ->setHorizontal(Alignment::HORIZONTAL_CENTER)
                 ->setVertical(Alignment::VERTICAL_CENTER);
@@ -406,7 +408,7 @@ $sheet->getRowDimension(18)->setRowHeight(-1);
         }
     }
 
-    // ✅ Final Grade letter
+    // Final Grade letter
     $gradecoord = Coordinate::stringFromColumnIndex($gradecolindex) . $row;
     $sheet->setCellValue($gradecoord, $finalpercent !== null
         ? $this->get_grade_letter($finalpercent)
@@ -419,7 +421,7 @@ $sheet->getRowDimension(18)->setRowHeight(-1);
     $row++;
 }
 
-        // ✅ Apply thin border to the entire used range
+        //  Apply thin border to the entire used range
         $lastcol = Coordinate::stringFromColumnIndex($col - 1);
         $lastrow = $row - 1; // because loop already incremented after last student
 

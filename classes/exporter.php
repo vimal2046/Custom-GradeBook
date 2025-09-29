@@ -328,104 +328,117 @@ $sheet->getRowDimension(18)->setRowHeight(-1);
         $row++;
         foreach ($users as $user) {
             $c = 1;
-        // Student ID
-        $coord = Coordinate::stringFromColumnIndex($c) . $row;
-        $sheet->setCellValue($coord, $user->idnumber ?: '-');
-        $sheet->getStyle($coord)->getAlignment()
-            ->setHorizontal(Alignment::HORIZONTAL_CENTER)
-            ->setVertical(Alignment::VERTICAL_CENTER);
-        $c++;
+            $nonsubmission = false; // ✅ track missing submission per student
 
-        // First name
-        $coord = Coordinate::stringFromColumnIndex($c) . $row;
-        $sheet->setCellValue($coord, $user->firstname);
-        $sheet->getStyle($coord)->getAlignment()
-            ->setHorizontal(Alignment::HORIZONTAL_CENTER)
-            ->setVertical(Alignment::VERTICAL_CENTER);
-        $c++;
-
-        // Surname
-        $coord = Coordinate::stringFromColumnIndex($c) . $row;
-        $sheet->setCellValue($coord, $user->lastname);
-        $sheet->getStyle($coord)->getAlignment()
-            ->setHorizontal(Alignment::HORIZONTAL_CENTER)
-            ->setVertical(Alignment::VERTICAL_CENTER);
-        $c++;
-
-
-    foreach ($assessmentitems as $item) {
-        $grade = grade_grade::fetch(['itemid' => $item->id, 'userid' => $user->id]);
-        foreach ($this->displaytype as $gradedisplayconst) {
-            $val = ($grade && $grade->finalgrade !== null)
-                ? $this->format_grade($grade, $gradedisplayconst)
-                : '-';
+            // Student ID
             $coord = Coordinate::stringFromColumnIndex($c) . $row;
-            $sheet->setCellValue($coord, $val);
-
-            // ✅ Center align grade values
+            $sheet->setCellValue($coord, $user->idnumber ?: '-');
             $sheet->getStyle($coord)->getAlignment()
                 ->setHorizontal(Alignment::HORIZONTAL_CENTER)
                 ->setVertical(Alignment::VERTICAL_CENTER);
-
-                // ✅ If value is "-" → red background
-            if ($val === '-') {
-                $sheet->getStyle($coord)->getFill()->setFillType(Fill::FILL_SOLID)
-                    ->getStartColor()->setRGB('FF9999'); // light red
-            }
-
             $c++;
-        }
-        if ($this->export_feedback) {
-            $feedbacktext = ($grade && !empty(trim(strip_tags($grade->feedback))))
-                ? trim(strip_tags($grade->feedback))
-                : '-';
-            $coord = Coordinate::stringFromColumnIndex($c) . $row;
-            $sheet->setCellValue($coord, $feedbacktext);
-            // (Feedback can stay left-aligned, so no centering here unless you want)
-            $c++;
-        }
-    }
 
-    $finalpercent = null;
-    if ($courseitem) {
-        $coursegrade = grade_grade::fetch(['itemid' => $courseitem->id, 'userid' => $user->id]);
-        foreach ($this->displaytype as $gradedisplayconst) {
-            $val = ($coursegrade && $coursegrade->finalgrade !== null)
-                ? $this->format_grade($coursegrade, $gradedisplayconst)
-                : '-';
+            // First name
             $coord = Coordinate::stringFromColumnIndex($c) . $row;
-            $sheet->setCellValue($coord, $val);
-
-            // ✅ Center align course total grades
+            $sheet->setCellValue($coord, $user->firstname);
             $sheet->getStyle($coord)->getAlignment()
                 ->setHorizontal(Alignment::HORIZONTAL_CENTER)
                 ->setVertical(Alignment::VERTICAL_CENTER);
+            $c++;
 
-                if ($val === '-') {
-                $sheet->getStyle($coord)->getFill()->setFillType(Fill::FILL_SOLID)
-                    ->getStartColor()->setRGB('FF9999'); // light red
+            // Surname
+            $coord = Coordinate::stringFromColumnIndex($c) . $row;
+            $sheet->setCellValue($coord, $user->lastname);
+            $sheet->getStyle($coord)->getAlignment()
+                ->setHorizontal(Alignment::HORIZONTAL_CENTER)
+                ->setVertical(Alignment::VERTICAL_CENTER);
+            $c++;
+
+            // Assignments & category items
+            foreach ($assessmentitems as $item) {
+                $grade = grade_grade::fetch(['itemid' => $item->id, 'userid' => $user->id]);
+                foreach ($this->displaytype as $gradedisplayconst) {
+                    $val = ($grade && $grade->finalgrade !== null)
+                        ? $this->format_grade($grade, $gradedisplayconst)
+                        : '-';
+
+                    $coord = Coordinate::stringFromColumnIndex($c) . $row;
+                    $sheet->setCellValue($coord, $val);
+
+                    // ✅ Center align
+                    $sheet->getStyle($coord)->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER)
+                        ->setVertical(Alignment::VERTICAL_CENTER);
+
+                    // ✅ If value is "-" → mark non-submission + red bg
+                    if ($val === '-') {
+                        $nonsubmission = true;
+                        $sheet->getStyle($coord)->getFill()->setFillType(Fill::FILL_SOLID)
+                            ->getStartColor()->setRGB('FF9999'); // light red background
+                    }
+
+                    $c++;
+                }
+                if ($this->export_feedback) {
+                    $feedbacktext = ($grade && !empty(trim(strip_tags($grade->feedback))))
+                        ? trim(strip_tags($grade->feedback))
+                        : '-';
+                    $coord = Coordinate::stringFromColumnIndex($c) . $row;
+                    $sheet->setCellValue($coord, $feedbacktext);
+                    $c++;
+                }
             }
 
-            $c++;
+            $finalpercent = null;
+            if ($courseitem) {
+                $coursegrade = grade_grade::fetch(['itemid' => $courseitem->id, 'userid' => $user->id]);
+                foreach ($this->displaytype as $gradedisplayconst) {
+                    $val = ($coursegrade && $coursegrade->finalgrade !== null)
+                        ? $this->format_grade($coursegrade, $gradedisplayconst)
+                        : '-';
+
+                    $coord = Coordinate::stringFromColumnIndex($c) . $row;
+                    $sheet->setCellValue($coord, $val);
+
+                    // ✅ Center align
+                    $sheet->getStyle($coord)->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER)
+                        ->setVertical(Alignment::VERTICAL_CENTER);
+
+                    // ✅ If missing → mark non-submission + red bg
+                    if ($val === '-') {
+                        $nonsubmission = true;
+                        $sheet->getStyle($coord)->getFill()->setFillType(Fill::FILL_SOLID)
+                            ->getStartColor()->setRGB('FF9999');
+                    }
+
+                    $c++;
+                }
+
+                if ($coursegrade && $coursegrade->finalgrade !== null) {
+                    $finalpercent = floatval($coursegrade->finalgrade / $courseitem->grademax * 100);
+                }
+            }
+
+            // ✅ Final Grade
+            $gradecoord = Coordinate::stringFromColumnIndex($gradecolindex) . $row;
+            if ($nonsubmission) {
+                $sheet->setCellValue($gradecoord, 'F (Non submission)');
+                $sheet->getStyle($gradecoord)->getFont()->getColor()->setRGB('FF0000'); // red text
+                $sheet->getStyle($gradecoord)->getFill()->setFillType(Fill::FILL_SOLID)
+                    ->getStartColor()->setRGB('FFCCCC'); // light red background
+            } else {
+                $sheet->setCellValue($gradecoord, $finalpercent !== null
+                    ? $this->get_grade_letter($finalpercent)
+                    : '-');
+                $sheet->getStyle($gradecoord)->getAlignment()
+                    ->setHorizontal(Alignment::HORIZONTAL_CENTER)
+                    ->setVertical(Alignment::VERTICAL_CENTER);
+            }
+
+            $row++;
         }
 
-        if ($coursegrade && $coursegrade->finalgrade !== null) {
-            $finalpercent = floatval($coursegrade->finalgrade / $courseitem->grademax * 100);
-        }
-    }
-
-    // ✅ Final Grade letter
-    $gradecoord = Coordinate::stringFromColumnIndex($gradecolindex) . $row;
-    $sheet->setCellValue($gradecoord, $finalpercent !== null
-        ? $this->get_grade_letter($finalpercent)
-        : '-');
-
-    $sheet->getStyle($gradecoord)->getAlignment()
-        ->setHorizontal(Alignment::HORIZONTAL_CENTER)
-        ->setVertical(Alignment::VERTICAL_CENTER);
-
-    $row++;
-}
 
         // ✅ Apply thin border to the entire used range
         $lastcol = Coordinate::stringFromColumnIndex($col - 1);

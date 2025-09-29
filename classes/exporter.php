@@ -158,14 +158,22 @@ class grade_export_customexcel extends grade_export {
         if (!empty($selecteditemids)) {
             foreach ($selecteditemids as $itemid) {
                 $item = grade_item::fetch(['id' => $itemid, 'courseid' => $this->course->id]);
-                if ($item && $item->itemtype === 'mod') {
-                    $assessmentitems[] = $item;
-                }
-                if ($item && $item->itemtype === 'course') {
-                    $courseitem = $item;
+
+                if ($item) {
+                    if ($item->itemtype === 'mod') {
+                        //  Regular assignment
+                        $assessmentitems[] = $item;
+                    } else if ($item->itemtype === 'category') {
+                        //  Category total (e.g. Assessment 2 group)
+                        $assessmentitems[] = $item;
+                    } else if ($item->itemtype === 'course') {
+                        // Course total
+                        $courseitem = $item;
+                    }
                 }
             }
         }
+
 
         if (empty($assessmentitems) && empty($courseitem)) {
             $sheet->setCellValue('A6', 'No grade items selected for export.');

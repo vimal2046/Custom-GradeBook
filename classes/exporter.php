@@ -220,7 +220,7 @@ class grade_export_customexcel extends grade_export {
 $row = 18;
 $col = 4;
 
-// ✅ Border style for headers
+//  Border style for headers
 $borderstyle = [
     'borders' => [
         'allBorders' => [
@@ -256,7 +256,7 @@ foreach ($assessmentitems as $item) {
         $sheet->setCellValue($coord, get_string($gradedisplayname, 'grades'));
         $sheet->getStyle($coord)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
 
-        // ✅ Apply fixed width + wrap
+        //  Apply fixed width + wrap
         $letter = Coordinate::stringFromColumnIndex($col);
         $sheet->getColumnDimension($letter)->setWidth(15);
         $sheet->getStyle($coord)->getAlignment()->setWrapText(true);
@@ -268,7 +268,19 @@ foreach ($assessmentitems as $item) {
     $startcolletter = Coordinate::stringFromColumnIndex($startcol);
     $endcolletter   = Coordinate::stringFromColumnIndex($col - 1);
     $sheet->mergeCells("{$startcolletter}{$row}:{$endcolletter}{$row}");
-    $sheet->setCellValue($startcolletter . $row, $item->get_name());
+   // $sheet->setCellValue($startcolletter . $row, $item->get_name());
+   //shows Assignment name + total as a category total name
+   $displayname = $item->get_name();
+
+    if ($item->itemtype === 'category') {
+        $cat = grade_category::fetch(['id' => $item->iteminstance]);
+        if ($cat) {
+            $displayname = $cat->fullname . ' total'; // e.g. "Assessment 1 total"
+        }
+    }
+
+    $sheet->setCellValue($startcolletter . $row, $displayname);
+
     $sheet->getStyle("{$startcolletter}{$row}:{$endcolletter}{$row}")
         ->applyFromArray($headerstyle)
         ->applyFromArray($borderstyle)
@@ -292,7 +304,7 @@ if ($courseitem) {
         $sheet->setCellValue($coord, get_string($gradedisplayname, 'grades'));
         $sheet->getStyle($coord)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
 
-        // ✅ Apply fixed width + wrap
+        //  Apply fixed width + wrap
         $letter = Coordinate::stringFromColumnIndex($col);
         $sheet->getColumnDimension($letter)->setWidth(15);
         $sheet->getStyle($coord)->getAlignment()->setWrapText(true);
@@ -309,11 +321,11 @@ if ($courseitem) {
         ->getAlignment()->setWrapText(true);
 }
 
-// ✅ Grade column
+//  Grade column
 $coord = Coordinate::stringFromColumnIndex($col) . $row;
 $sheet->setCellValue($coord, 'Grade');
 $sheet->getStyle($coord)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
-$sheet->getColumnDimension(Coordinate::stringFromColumnIndex($col))->setWidth(15);
+$sheet->getColumnDimension(Coordinate::stringFromColumnIndex($col))->setWidth(18);
 $sheet->getStyle($coord)->getAlignment()->setWrapText(true);
 
 $gradecolindex = $col;
@@ -328,7 +340,7 @@ $sheet->getRowDimension(18)->setRowHeight(-1);
         $row++;
         foreach ($users as $user) {
             $c = 1;
-            $nonsubmission = false; // ✅ track missing submission per student
+            $nonsubmission = false; //  track missing submission per student
 
             // Student ID
             $coord = Coordinate::stringFromColumnIndex($c) . $row;
@@ -365,12 +377,12 @@ $sheet->getRowDimension(18)->setRowHeight(-1);
                     $coord = Coordinate::stringFromColumnIndex($c) . $row;
                     $sheet->setCellValue($coord, $val);
 
-                    // ✅ Center align
+                    //  Center align
                     $sheet->getStyle($coord)->getAlignment()
                         ->setHorizontal(Alignment::HORIZONTAL_CENTER)
                         ->setVertical(Alignment::VERTICAL_CENTER);
 
-                    // ✅ If value is "-" → mark non-submission + red bg
+                    //  If value is "-" → mark non-submission + red bg
                     if ($val === '-') {
                         $nonsubmission = true;
                         $sheet->getStyle($coord)->getFill()->setFillType(Fill::FILL_SOLID)
@@ -400,12 +412,12 @@ $sheet->getRowDimension(18)->setRowHeight(-1);
                     $coord = Coordinate::stringFromColumnIndex($c) . $row;
                     $sheet->setCellValue($coord, $val);
 
-                    // ✅ Center align
+                    //  Center align
                     $sheet->getStyle($coord)->getAlignment()
                         ->setHorizontal(Alignment::HORIZONTAL_CENTER)
                         ->setVertical(Alignment::VERTICAL_CENTER);
 
-                    // ✅ If missing → mark non-submission + red bg
+                    //  If missing → mark non-submission + red bg
                     if ($val === '-') {
                         $nonsubmission = true;
                         $sheet->getStyle($coord)->getFill()->setFillType(Fill::FILL_SOLID)
@@ -420,10 +432,10 @@ $sheet->getRowDimension(18)->setRowHeight(-1);
                 }
             }
 
-            // ✅ Final Grade
+            //  Final Grade
             $gradecoord = Coordinate::stringFromColumnIndex($gradecolindex) . $row;
             if ($nonsubmission) {
-                $sheet->setCellValue($gradecoord, 'F (Non submission)');
+                $sheet->setCellValue($gradecoord, 'Fail (Non submission)');
                 $sheet->getStyle($gradecoord)->getFont()->getColor()->setRGB('FF0000'); // red text
                 $sheet->getStyle($gradecoord)->getFill()->setFillType(Fill::FILL_SOLID)
                     ->getStartColor()->setRGB('FFCCCC'); // light red background

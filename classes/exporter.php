@@ -36,6 +36,8 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
+
 /**
  * Custom Excel grade export class.
  *
@@ -64,6 +66,22 @@ class grade_export_customexcel extends grade_export {
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Results template sample');
 
+        //adding logo
+
+        // Insert logo in first row (A1).
+$logo = new Drawing();
+$logo->setName('Logo');
+$logo->setDescription('Institution Logo');
+
+// Path: plugin root (since exporter.php is in classes/, go up one folder).
+$logo->setPath(__DIR__ . '/../logo.png');  // adjust filename if different
+$logo->setHeight(60); // Adjust logo height
+$logo->setCoordinates('A1'); // Place at cell A1
+$logo->setOffsetX(5);  // small horizontal offset
+$logo->setOffsetY(5);  // small vertical offset
+$logo->setWorksheet($sheet);
+
+$sheet->getRowDimension(1)->setRowHeight(50);
         // Styles.
         $headerstyle = [
             'font' => ['bold' => true],
@@ -73,6 +91,71 @@ class grade_export_customexcel extends grade_export {
                 'startColor' => ['rgb' => 'F8CBAD'],
             ],
         ];
+            
+        $studentinfostyle = [
+            'font' => ['bold' => true, 'color' => ['rgb' => '000000']],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+            'fill' => [
+                'fillType' => Fill::FILL_SOLID,
+                'startColor' => ['rgb' => '538AC8'], // Blue
+            ],
+            'borders' => [
+                'allBorders' => [
+                    'borderStyle' => Border::BORDER_THIN,
+                    'color' => ['rgb' => '000000'],
+                ],
+            ],
+        ];
+
+        $assessmentstyle = [
+            'font' => ['bold' => true],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+            'fill' => [
+                'fillType' => Fill::FILL_SOLID,
+                'startColor' => ['rgb' => 'FFF1E3'], // Light orange
+            ],
+            'borders' => [
+                'allBorders' => [
+                    'borderStyle' => Border::BORDER_THIN,
+                    'color' => ['rgb' => '000000'],
+                ],
+            ],
+        ];
+
+        $coursetotalstyle = [
+            'font' => ['bold' => true, 'color' => ['rgb' => '00000']],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+            'fill' => [
+                'fillType' => Fill::FILL_SOLID,
+                'startColor' => ['rgb' => '538AC8'], // Blue
+            ],
+            'borders' => [
+                'allBorders' => [
+                    'borderStyle' => Border::BORDER_THIN,
+                    'color' => ['rgb' => '000000'],
+                ],
+            ],
+        ];
+
+    $refstyle = [
+        'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+        'alignment' => ['horizontal' => Alignment::HORIZONTAL_LEFT, 'vertical' => Alignment::VERTICAL_CENTER],
+        'fill' => [
+            'fillType' => Fill::FILL_SOLID,
+            'startColor' => ['rgb' => '131346'], // Dark navy
+        ],
+    ];
+
+    $gradescalestyle = [
+        'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+        'alignment' => ['horizontal' => Alignment::HORIZONTAL_LEFT, 'vertical' => Alignment::VERTICAL_CENTER],
+        'fill' => [
+            'fillType' => Fill::FILL_SOLID,
+            'startColor' => ['rgb' => '131346'], // Dark navy
+        ],
+    ];
+
+
         $notesstyle = ['font' => ['italic' => true]];
         $notesboldstyle = ['font' => ['bold' => true]];
 
@@ -89,7 +172,7 @@ class grade_export_customexcel extends grade_export {
 
         $sheet->mergeCells('A5:B5');
         $sheet->setCellValue('A5', 'Reference Information:');
-        $sheet->getStyle('A5')->applyFromArray($headerstyle);
+        $sheet->getStyle('A5')->applyFromArray($refstyle);
         $sheet->setCellValue('B6', 'A dash (-) signifies no submission (automatic fail).');
         $sheet->getStyle('B6')->applyFromArray($notesstyle);
         $sheet->setCellValue('B7', 'A zero (0) signifies late submission beyond 2 weeks.');
@@ -113,7 +196,7 @@ class grade_export_customexcel extends grade_export {
             // Place "Grade scale" at A11.
             $row = 11;
             $sheet->setCellValue("A{$row}", 'Grade scale:');
-            $sheet->getStyle("A{$row}")->applyFromArray($headerstyle);;
+            $sheet->getStyle("A{$row}")->applyFromArray($gradescalestyle);;
 
             // Keep previous upper boundary (start at 100).
             $prevboundary = 100.0;
@@ -232,17 +315,21 @@ $borderstyle = [
 
 // Student identity headers
 $sheet->setCellValue('A' . $row, 'Student ID');
-$sheet->getStyle('A' . $row)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
+//$sheet->getStyle('A' . $row)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
+$sheet->getStyle('A' . $row)->applyFromArray($studentinfostyle);
 $sheet->getColumnDimension('A')->setWidth(15);
 $sheet->getStyle('A' . $row)->getAlignment()->setWrapText(true);
 
 $sheet->setCellValue('B' . $row, 'First name');
-$sheet->getStyle('B' . $row)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
+//$sheet->getStyle('B' . $row)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
+$sheet->getStyle('B' . $row)->applyFromArray($studentinfostyle);
+
 $sheet->getColumnDimension('B')->setWidth(15);
 $sheet->getStyle('B' . $row)->getAlignment()->setWrapText(true);
 
 $sheet->setCellValue('C' . $row, 'Surname');
-$sheet->getStyle('C' . $row)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
+//$sheet->getStyle('C' . $row)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
+$sheet->getStyle('C' . $row)->applyFromArray($studentinfostyle);
 $sheet->getColumnDimension('C')->setWidth(15);
 $sheet->getStyle('C' . $row)->getAlignment()->setWrapText(true);
 
@@ -254,7 +341,8 @@ foreach ($assessmentitems as $item) {
     foreach ($this->displaytype as $gradedisplayname => $gradedisplayconst) {
         $coord = Coordinate::stringFromColumnIndex($col) . $row;
         $sheet->setCellValue($coord, get_string($gradedisplayname, 'grades'));
-        $sheet->getStyle($coord)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
+        //$sheet->getStyle($coord)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
+        $sheet->getStyle($coord)->applyFromArray($assessmentstyle);
 
         //  Apply fixed width + wrap
         $letter = Coordinate::stringFromColumnIndex($col);
@@ -282,7 +370,7 @@ foreach ($assessmentitems as $item) {
     $sheet->setCellValue($startcolletter . $row, $displayname);
 
     $sheet->getStyle("{$startcolletter}{$row}:{$endcolletter}{$row}")
-        ->applyFromArray($headerstyle)
+        ->applyFromArray($assessmentstyle)
         ->applyFromArray($borderstyle)
         ->getAlignment()->setWrapText(true);
 
@@ -316,15 +404,16 @@ if ($courseitem) {
     $sheet->mergeCells("{$startcolletter}{$row}:{$endcolletter}{$row}");
     $sheet->setCellValue($startcolletter . $row, get_string('coursetotal', 'grades'));
     $sheet->getStyle("{$startcolletter}{$row}:{$endcolletter}{$row}")
-        ->applyFromArray($headerstyle)
-        ->applyFromArray($borderstyle)
+        ->applyFromArray($coursetotalstyle)
+       // ->applyFromArray($borderstyle)
         ->getAlignment()->setWrapText(true);
 }
 
 //  Grade column
 $coord = Coordinate::stringFromColumnIndex($col) . $row;
 $sheet->setCellValue($coord, 'Grade');
-$sheet->getStyle($coord)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
+//$sheet->getStyle($coord)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
+$sheet->getStyle($coord)->applyFromArray($studentinfostyle);
 $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($col))->setWidth(18);
 $sheet->getStyle($coord)->getAlignment()->setWrapText(true);
 
@@ -386,7 +475,7 @@ $sheet->getRowDimension(18)->setRowHeight(-1);
                     if ($val === '-') {
                         $nonsubmission = true;
                         $sheet->getStyle($coord)->getFill()->setFillType(Fill::FILL_SOLID)
-                            ->getStartColor()->setRGB('FF9999'); // light red background
+                            ->getStartColor()->setRGB('EF4C4D'); // light red background
                     }
 
                     $c++;
@@ -421,7 +510,7 @@ $sheet->getRowDimension(18)->setRowHeight(-1);
                     if ($val === '-') {
                         $nonsubmission = true;
                         $sheet->getStyle($coord)->getFill()->setFillType(Fill::FILL_SOLID)
-                            ->getStartColor()->setRGB('FF9999');
+                            ->getStartColor()->setRGB('EF4C4D');
                     }
 
                     $c++;
@@ -452,7 +541,7 @@ $sheet->getRowDimension(18)->setRowHeight(-1);
         }
 
 
-        // ✅ Apply thin border to the entire used range
+        //  Apply thin border to the entire used range
         $lastcol = Coordinate::stringFromColumnIndex($col - 1);
         $lastrow = $row - 1; // because loop already incremented after last student
 

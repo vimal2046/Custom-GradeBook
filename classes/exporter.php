@@ -74,11 +74,11 @@ class grade_export_customexcel extends grade_export {
         $logo->setDescription('Institution Logo');
 
         // Path: plugin root (since exporter.php is in classes/, go up one folder).
-        $logo->setPath(__DIR__ . '/../logo.png');  // adjust filename if different
-        $logo->setHeight(60); // Adjust logo height
-        $logo->setCoordinates('A1'); // Place at cell A1
-        $logo->setOffsetX(5);  // small horizontal offset
-        $logo->setOffsetY(5);  // small vertical offset
+        $logo->setPath(__DIR__ . '/../logo.png');  // Adjust filename if different.
+        $logo->setHeight(60); // Adjust logo height.
+        $logo->setCoordinates('A1'); // Place at cell A1.
+        $logo->setOffsetX(5);  // Small horizontal offset.
+        $logo->setOffsetY(5);  // Small vertical offset.
         $logo->setWorksheet($sheet);
 
         $sheet->getRowDimension(1)->setRowHeight(50);
@@ -112,7 +112,7 @@ class grade_export_customexcel extends grade_export {
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
             'fill' => [
                 'fillType' => Fill::FILL_SOLID,
-                'startColor' => ['rgb' => 'FFF1E3'], // Light orange
+                'startColor' => ['rgb' => 'FFF1E3'], // Light orange.
             ],
             'borders' => [
                 'allBorders' => [
@@ -127,7 +127,7 @@ class grade_export_customexcel extends grade_export {
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
             'fill' => [
                 'fillType' => Fill::FILL_SOLID,
-                'startColor' => ['rgb' => '538AC8'], // Blue
+                'startColor' => ['rgb' => '538AC8'], // Blue.
             ],
             'borders' => [
                 'allBorders' => [
@@ -137,23 +137,23 @@ class grade_export_customexcel extends grade_export {
             ],
         ];
 
-    $refstyle = [
-        'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
-        'alignment' => ['horizontal' => Alignment::HORIZONTAL_LEFT, 'vertical' => Alignment::VERTICAL_CENTER],
-        'fill' => [
-            'fillType' => Fill::FILL_SOLID,
-            'startColor' => ['rgb' => '131346'], // Dark navy
-        ],
-    ];
+        $refstyle = [
+            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_LEFT, 'vertical' => Alignment::VERTICAL_CENTER],
+            'fill' => [
+                'fillType' => Fill::FILL_SOLID,
+                'startColor' => ['rgb' => '131346'], // Dark navy.
+            ],
+        ];
 
-    $gradescalestyle = [
-        'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
-        'alignment' => ['horizontal' => Alignment::HORIZONTAL_LEFT, 'vertical' => Alignment::VERTICAL_CENTER],
-        'fill' => [
-            'fillType' => Fill::FILL_SOLID,
-            'startColor' => ['rgb' => '131346'], // Dark navy
-        ],
-    ];
+        $gradescalestyle = [
+            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_LEFT, 'vertical' => Alignment::VERTICAL_CENTER],
+            'fill' => [
+                'fillType' => Fill::FILL_SOLID,
+                'startColor' => ['rgb' => '131346'], // Dark navy.
+            ],
+        ];
 
 
         $notesstyle = ['font' => ['italic' => true]];
@@ -182,9 +182,7 @@ class grade_export_customexcel extends grade_export {
         $sheet->setCellValue('B9', 'All course totals are rounded to the whole number.');
         $sheet->getStyle('B9')->applyFromArray($notesboldstyle);
 
-        // --------------------------------------------------------------------
         // Grade Letters reference (single-column scale in A11 / B11↓)
-        // --------------------------------------------------------------------
         $context = context_course::instance($this->course->id);
         $letters = grade_get_letters($context);
         if (empty($letters)) {
@@ -213,20 +211,13 @@ class grade_export_customexcel extends grade_export {
                 // Grade strings go into column B (starting same row).
                 $sheet->setCellValue("B{$row}", "{$letter}: " .
                     $formatBound((float)$lowerboundary) . '-' . $formatBound($prevboundary));
-
                 // Next row for next grade.
                 $row++;
                 $prevboundary = (float)$lowerboundary;
             }
-
-            // Optional: auto-size column B for text width.
-           // $sheet->getColumnDimension('B')->setAutoSize(true);
         }
 
-
-        // --------------------------------------------------------------------
         // Handle selected grade items
-        // --------------------------------------------------------------------
         $selecteditemids = [];
         if (!empty($this->formdata->itemids)) {
             if (is_array($this->formdata->itemids)) {
@@ -271,9 +262,7 @@ class grade_export_customexcel extends grade_export {
             exit;
         }
 
-        // --------------------------------------------------------------------
         // Users
-        // --------------------------------------------------------------------
         $users = [];
         $gui = new graded_users_iterator($this->course, $assessmentitems, $this->groupid);
         $gui->require_active_enrolment($this->onlyactive);
@@ -297,9 +286,8 @@ class grade_export_customexcel extends grade_export {
             $writer->save('php://output');
             exit;
         }
-        // --------------------------------------------------------------------
+
         // Header row
-        // --------------------------------------------------------------------
         $row = 18;
         $col = 4;
 
@@ -315,20 +303,15 @@ class grade_export_customexcel extends grade_export {
 
         // Student identity headers
         $sheet->setCellValue('A' . $row, 'Student ID');
-        //$sheet->getStyle('A' . $row)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
         $sheet->getStyle('A' . $row)->applyFromArray($studentinfostyle);
         $sheet->getColumnDimension('A')->setWidth(15);
         $sheet->getStyle('A' . $row)->getAlignment()->setWrapText(true);
 
         $sheet->setCellValue('B' . $row, 'First name');
-        //$sheet->getStyle('B' . $row)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
         $sheet->getStyle('B' . $row)->applyFromArray($studentinfostyle);
-
         $sheet->getColumnDimension('B')->setWidth(15);
         $sheet->getStyle('B' . $row)->getAlignment()->setWrapText(true);
-
         $sheet->setCellValue('C' . $row, 'Surname');
-        //$sheet->getStyle('C' . $row)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
         $sheet->getStyle('C' . $row)->applyFromArray($studentinfostyle);
         $sheet->getColumnDimension('C')->setWidth(15);
         $sheet->getStyle('C' . $row)->getAlignment()->setWrapText(true);
@@ -341,7 +324,6 @@ class grade_export_customexcel extends grade_export {
         foreach ($this->displaytype as $gradedisplayname => $gradedisplayconst) {
             $coord = Coordinate::stringFromColumnIndex($col) . $row;
             $sheet->setCellValue($coord, get_string($gradedisplayname, 'grades'));
-            //$sheet->getStyle($coord)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
             $sheet->getStyle($coord)->applyFromArray($assessmentstyle);
 
             //  Apply fixed width + wrap
@@ -356,7 +338,6 @@ class grade_export_customexcel extends grade_export {
         $startcolletter = Coordinate::stringFromColumnIndex($startcol);
         $endcolletter   = Coordinate::stringFromColumnIndex($col - 1);
         $sheet->mergeCells("{$startcolletter}{$row}:{$endcolletter}{$row}");
-    // $sheet->setCellValue($startcolletter . $row, $item->get_name());
     //shows Assignment name + total as a category total name
     $displayname = $item->get_name();
 
@@ -425,7 +406,6 @@ if ($courseitem) {
         // Freeze the top 18 rows so headers stay visible when scrolling.
         $sheet->freezePane('A19');
 
-
         // --- Fix: Force wrap and auto-adjust row height manually ---
         $highestColumn = $sheet->getHighestColumn(18);
         $range = "A18:{$highestColumn}18";
@@ -453,11 +433,7 @@ if ($courseitem) {
 
         $sheet->getRowDimension(18)->setRowHeight($rowHeight);
 
-
-
-        // --------------------------------------------------------------------
         // Student rows
-        // --------------------------------------------------------------------
         $row++;
         foreach ($users as $user) {
             $c = 1;
@@ -572,7 +548,6 @@ if ($courseitem) {
             $row++;
         }
 
-
         //  Apply thin border to the entire used range
         $lastcol = Coordinate::stringFromColumnIndex($col - 1);
         $lastrow = $row - 1; // because loop already incremented after last student
@@ -586,9 +561,7 @@ if ($courseitem) {
             ],
         ]);
 
-        // --------------------------------------------------------------------
         // Output
-        // --------------------------------------------------------------------
         header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         header("Content-Disposition: attachment;filename=\"$filename\"");
         $writer = new Xlsx($spreadsheet);
@@ -596,9 +569,8 @@ if ($courseitem) {
         exit;
     }
 
-    /**
-     * Convert percentage to grade letter.
-     */
+    
+     //Convert percentage to grade letter.
     protected function get_grade_letter($percentage) {
         $context = context_course::instance($this->course->id);
         $letters = grade_get_letters($context);

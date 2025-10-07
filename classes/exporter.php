@@ -69,19 +69,19 @@ class grade_export_customexcel extends grade_export {
         //adding logo
 
         // Insert logo in first row (A1).
-$logo = new Drawing();
-$logo->setName('Logo');
-$logo->setDescription('Institution Logo');
+        $logo = new Drawing();
+        $logo->setName('Logo');
+        $logo->setDescription('Institution Logo');
 
-// Path: plugin root (since exporter.php is in classes/, go up one folder).
-$logo->setPath(__DIR__ . '/../logo.png');  // adjust filename if different
-$logo->setHeight(60); // Adjust logo height
-$logo->setCoordinates('A1'); // Place at cell A1
-$logo->setOffsetX(5);  // small horizontal offset
-$logo->setOffsetY(5);  // small vertical offset
-$logo->setWorksheet($sheet);
+        // Path: plugin root (since exporter.php is in classes/, go up one folder).
+        $logo->setPath(__DIR__ . '/../logo.png');  // adjust filename if different
+        $logo->setHeight(60); // Adjust logo height
+        $logo->setCoordinates('A1'); // Place at cell A1
+        $logo->setOffsetX(5);  // small horizontal offset
+        $logo->setOffsetY(5);  // small vertical offset
+        $logo->setWorksheet($sheet);
 
-$sheet->getRowDimension(1)->setRowHeight(50);
+        $sheet->getRowDimension(1)->setRowHeight(50);
         // Styles.
         $headerstyle = [
             'font' => ['bold' => true],
@@ -422,6 +422,38 @@ if ($courseitem) {
 
         $sheet->getRowDimension(18)->setRowHeight(-1);
 
+        // Freeze the top 18 rows so headers stay visible when scrolling.
+        $sheet->freezePane('A19');
+
+
+        // --- Fix: Force wrap and auto-adjust row height manually ---
+        $highestColumn = $sheet->getHighestColumn(18);
+        $range = "A18:{$highestColumn}18";
+
+        // Ensure wrapping is turned on for all header cells.
+        $sheet->getStyle($range)->getAlignment()->setWrapText(true);
+
+        // Manually estimate row height based on longest text in the header row.
+        $maxTextLength = 0;
+        foreach (range('A', $highestColumn) as $colLetter) {
+            $cellValue = $sheet->getCell("{$colLetter}18")->getValue();
+            if (is_string($cellValue)) {
+                $length = strlen($cellValue);
+                if ($length > $maxTextLength) {
+                    $maxTextLength = $length;
+                }
+            }
+        }
+
+        // Adjust row height based on text length (rough approximation).
+        // You can tune the multiplier (0.8 or 1.2) if you want tighter spacing.
+        $baseHeight = 20; // default single-line height
+        $extraLines = ceil($maxTextLength / 25); // 25 chars per line at width=15 roughly
+        $rowHeight = $baseHeight + ($extraLines * 12);
+
+        $sheet->getRowDimension(18)->setRowHeight($rowHeight);
+
+
 
         // --------------------------------------------------------------------
         // Student rows
@@ -583,4 +615,3 @@ if ($courseitem) {
 }
 
 
-//ToDo : want to show a color in grade as red and show F (Non submission) if not submitted...

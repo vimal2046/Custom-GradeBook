@@ -98,7 +98,7 @@ if (!$formdata) {
             // If nothing selected keep -1 (consistent with core behaviour).
             $formdata->itemids = empty($ids) ? -1 : $ids;
         } else {
-            // If string like "1,2,3" or "-1":
+            // If string like "1,2,3" or "-1".
             if ($formdata->itemids === '-1') {
                 $formdata->itemids = -1;
             } else {

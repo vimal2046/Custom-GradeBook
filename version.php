@@ -24,6 +24,6 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2025091125;   // YYYYMMDDXX format.
+$plugin->version   = 2025091126;   // YYYYMMDDXX format.
 $plugin->requires  = 2022041900;   // Moodle 4.0+.
 $plugin->component = 'gradeexport_customexcel';

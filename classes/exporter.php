@@ -297,93 +297,93 @@ $sheet->getRowDimension(1)->setRowHeight(50);
             $writer->save('php://output');
             exit;
         }
-// --------------------------------------------------------------------
-// Header row
-// --------------------------------------------------------------------
-$row = 18;
-$col = 4;
+        // --------------------------------------------------------------------
+        // Header row
+        // --------------------------------------------------------------------
+        $row = 18;
+        $col = 4;
 
-//  Border style for headers
-$borderstyle = [
-    'borders' => [
-        'allBorders' => [
-            'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
-            'color' => ['rgb' => '000000'],
-        ],
-    ],
-];
+        //  Border style for headers
+        $borderstyle = [
+            'borders' => [
+                'allBorders' => [
+                    'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                    'color' => ['rgb' => '000000'],
+                ],
+            ],
+        ];
 
-// Student identity headers
-$sheet->setCellValue('A' . $row, 'Student ID');
-//$sheet->getStyle('A' . $row)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
-$sheet->getStyle('A' . $row)->applyFromArray($studentinfostyle);
-$sheet->getColumnDimension('A')->setWidth(15);
-$sheet->getStyle('A' . $row)->getAlignment()->setWrapText(true);
+        // Student identity headers
+        $sheet->setCellValue('A' . $row, 'Student ID');
+        //$sheet->getStyle('A' . $row)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
+        $sheet->getStyle('A' . $row)->applyFromArray($studentinfostyle);
+        $sheet->getColumnDimension('A')->setWidth(15);
+        $sheet->getStyle('A' . $row)->getAlignment()->setWrapText(true);
 
-$sheet->setCellValue('B' . $row, 'First name');
-//$sheet->getStyle('B' . $row)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
-$sheet->getStyle('B' . $row)->applyFromArray($studentinfostyle);
+        $sheet->setCellValue('B' . $row, 'First name');
+        //$sheet->getStyle('B' . $row)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
+        $sheet->getStyle('B' . $row)->applyFromArray($studentinfostyle);
 
-$sheet->getColumnDimension('B')->setWidth(15);
-$sheet->getStyle('B' . $row)->getAlignment()->setWrapText(true);
+        $sheet->getColumnDimension('B')->setWidth(15);
+        $sheet->getStyle('B' . $row)->getAlignment()->setWrapText(true);
 
-$sheet->setCellValue('C' . $row, 'Surname');
-//$sheet->getStyle('C' . $row)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
-$sheet->getStyle('C' . $row)->applyFromArray($studentinfostyle);
-$sheet->getColumnDimension('C')->setWidth(15);
-$sheet->getStyle('C' . $row)->getAlignment()->setWrapText(true);
+        $sheet->setCellValue('C' . $row, 'Surname');
+        //$sheet->getStyle('C' . $row)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
+        $sheet->getStyle('C' . $row)->applyFromArray($studentinfostyle);
+        $sheet->getColumnDimension('C')->setWidth(15);
+        $sheet->getStyle('C' . $row)->getAlignment()->setWrapText(true);
 
-// Assignments
-foreach ($assessmentitems as $item) {
-    $startcol = $col;
+        // Assignments
+        foreach ($assessmentitems as $item) {
+            $startcol = $col;
 
-    // Subcolumns (Real, Percentage, Letter, etc.)
-    foreach ($this->displaytype as $gradedisplayname => $gradedisplayconst) {
-        $coord = Coordinate::stringFromColumnIndex($col) . $row;
-        $sheet->setCellValue($coord, get_string($gradedisplayname, 'grades'));
-        //$sheet->getStyle($coord)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
-        $sheet->getStyle($coord)->applyFromArray($assessmentstyle);
+        // Subcolumns (Real, Percentage, Letter, etc.)
+        foreach ($this->displaytype as $gradedisplayname => $gradedisplayconst) {
+            $coord = Coordinate::stringFromColumnIndex($col) . $row;
+            $sheet->setCellValue($coord, get_string($gradedisplayname, 'grades'));
+            //$sheet->getStyle($coord)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
+            $sheet->getStyle($coord)->applyFromArray($assessmentstyle);
 
-        //  Apply fixed width + wrap
-        $letter = Coordinate::stringFromColumnIndex($col);
-        $sheet->getColumnDimension($letter)->setWidth(15);
-        $sheet->getStyle($coord)->getAlignment()->setWrapText(true);
+            //  Apply fixed width + wrap
+            $letter = Coordinate::stringFromColumnIndex($col);
+            $sheet->getColumnDimension($letter)->setWidth(15);
+            $sheet->getStyle($coord)->getAlignment()->setWrapText(true);
 
-        $col++;
-    }
+            $col++;
+        }
 
-    // Merge across subcolumns → assignment name
-    $startcolletter = Coordinate::stringFromColumnIndex($startcol);
-    $endcolletter   = Coordinate::stringFromColumnIndex($col - 1);
-    $sheet->mergeCells("{$startcolletter}{$row}:{$endcolletter}{$row}");
-   // $sheet->setCellValue($startcolletter . $row, $item->get_name());
-   //shows Assignment name + total as a category total name
-   $displayname = $item->get_name();
+        // Merge across subcolumns → assignment name
+        $startcolletter = Coordinate::stringFromColumnIndex($startcol);
+        $endcolletter   = Coordinate::stringFromColumnIndex($col - 1);
+        $sheet->mergeCells("{$startcolletter}{$row}:{$endcolletter}{$row}");
+    // $sheet->setCellValue($startcolletter . $row, $item->get_name());
+    //shows Assignment name + total as a category total name
+    $displayname = $item->get_name();
 
-    if ($item->itemtype === 'category') {
-        $cat = grade_category::fetch(['id' => $item->iteminstance]);
-        if ($cat) {
-            $displayname = $cat->fullname . ' total'; // e.g. "Assessment 1 total"
+        if ($item->itemtype === 'category') {
+            $cat = grade_category::fetch(['id' => $item->iteminstance]);
+            if ($cat) {
+                $displayname = $cat->fullname . ' total'; // e.g. "Assessment 1 total"
+            }
+        }
+
+        $sheet->setCellValue($startcolletter . $row, $displayname);
+
+        $sheet->getStyle("{$startcolletter}{$row}:{$endcolletter}{$row}")
+            ->applyFromArray($assessmentstyle)
+            ->applyFromArray($borderstyle)
+            ->getAlignment()->setWrapText(true);
+
+        if ($this->export_feedback) {
+            $coord = Coordinate::stringFromColumnIndex($col) . $row;
+            $sheet->setCellValue($coord, get_string('feedback'));
+            $sheet->getStyle($coord)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
+            $letter = Coordinate::stringFromColumnIndex($col);
+            $sheet->getColumnDimension($letter)->setWidth(15);
+            $sheet->getStyle($coord)->getAlignment()->setWrapText(true);
+            $col++;
         }
     }
-
-    $sheet->setCellValue($startcolletter . $row, $displayname);
-
-    $sheet->getStyle("{$startcolletter}{$row}:{$endcolletter}{$row}")
-        ->applyFromArray($assessmentstyle)
-        ->applyFromArray($borderstyle)
-        ->getAlignment()->setWrapText(true);
-
-    if ($this->export_feedback) {
-        $coord = Coordinate::stringFromColumnIndex($col) . $row;
-        $sheet->setCellValue($coord, get_string('feedback'));
-        $sheet->getStyle($coord)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
-        $letter = Coordinate::stringFromColumnIndex($col);
-        $sheet->getColumnDimension($letter)->setWidth(15);
-        $sheet->getStyle($coord)->getAlignment()->setWrapText(true);
-        $col++;
-    }
-}
 
 if ($courseitem) {
     $startcol = $col;
@@ -409,18 +409,18 @@ if ($courseitem) {
         ->getAlignment()->setWrapText(true);
 }
 
-//  Grade column
-$coord = Coordinate::stringFromColumnIndex($col) . $row;
-$sheet->setCellValue($coord, 'Grade');
-//$sheet->getStyle($coord)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
-$sheet->getStyle($coord)->applyFromArray($studentinfostyle);
-$sheet->getColumnDimension(Coordinate::stringFromColumnIndex($col))->setWidth(18);
-$sheet->getStyle($coord)->getAlignment()->setWrapText(true);
+        //  Grade column
+        $coord = Coordinate::stringFromColumnIndex($col) . $row;
+        $sheet->setCellValue($coord, 'Grade');
+        //$sheet->getStyle($coord)->applyFromArray($headerstyle)->applyFromArray($borderstyle);
+        $sheet->getStyle($coord)->applyFromArray($studentinfostyle);
+        $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($col))->setWidth(18);
+        $sheet->getStyle($coord)->getAlignment()->setWrapText(true);
 
-$gradecolindex = $col;
-$col++;
+        $gradecolindex = $col;
+        $col++;
 
-$sheet->getRowDimension(18)->setRowHeight(-1);
+        $sheet->getRowDimension(18)->setRowHeight(-1);
 
 
         // --------------------------------------------------------------------

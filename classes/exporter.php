@@ -443,7 +443,8 @@ class grade_export_customexcel extends grade_export {
         $extralines = ceil($maxtextlength / 25); // 25 chars per line at width=15 roughly.
         $rowheight = $baseheight + ($extralines * 12);
 
-        $sheet->getRowDimension(18)->setRowHeight($rowheight);
+        $sheet->getRowDimension(18)->setRowHeight($rowheight + 4);
+
 
         // Student rows.
         $row++;

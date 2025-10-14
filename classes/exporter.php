@@ -168,6 +168,22 @@ class grade_export_customexcel extends grade_export {
                 'startColor' => ['rgb' => '131346'], // Dark navy.
             ],
         ];
+        
+        $assignmentheaderstyle = [
+            'font' => ['bold' => true],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+            'fill' => [
+                'fillType' => Fill::FILL_SOLID,
+                'startColor' => ['rgb' => 'D9D9D9'], // Grey background.
+            ],
+            'borders' => [
+                'allBorders' => [
+                    'borderStyle' => Border::BORDER_THIN,
+                    'color' => ['rgb' => '000000'],
+                ],
+            ],
+        ];
+
 
         $notesstyle = ['font' => ['italic' => true]];
         $notesboldstyle = ['font' => ['bold' => true]];
@@ -196,6 +212,8 @@ class grade_export_customexcel extends grade_export {
         $sheet->getStyle('B8')->applyFromArray($notesstyle);
         $sheet->setCellValue('B9', 'All course totals are rounded to the whole number.');
         $sheet->getStyle('B9')->applyFromArray($notesboldstyle);
+        $sheet->setCellValue('B10', 'Sub-assessment columns are shaded in grey for easy identification.');
+        $sheet->getStyle('B10')->applyFromArray($notesstyle);
 
         // Grade Letters reference (single-column scale in A11 / B11↓).
         $context = context_course::instance($this->course->id);
@@ -206,8 +224,8 @@ class grade_export_customexcel extends grade_export {
         }
 
         if (!empty($letters)) {
-            // Place "Grade scale" at A11.
-            $row = 11;
+            // Place "Grade scale" at A12.
+            $row = 12;
             $sheet->setCellValue("A{$row}", 'Grade scale:');
             $sheet->getStyle("A{$row}")->applyFromArray($gradescalestyle);;
 
@@ -364,10 +382,20 @@ class grade_export_customexcel extends grade_export {
 
             $sheet->setCellValue($startcolletter . $row, $displayname);
 
-            $sheet->getStyle("{$startcolletter}{$row}:{$endcolletter}{$row}")
-                ->applyFromArray($assessmentstyle)
-                ->applyFromArray($borderstyle)
-                ->getAlignment()->setWrapText(true);
+            // Apply different colors for assignments vs totals.
+            if ($item->itemtype === 'mod') {
+                // Regular assignment → grey.
+                $sheet->getStyle("{$startcolletter}{$row}:{$endcolletter}{$row}")
+                    ->applyFromArray($assignmentheaderstyle)
+                    ->applyFromArray($borderstyle)
+                    ->getAlignment()->setWrapText(true);
+            } else {
+                // Category total or course total → keep existing color.
+                $sheet->getStyle("{$startcolletter}{$row}:{$endcolletter}{$row}")
+                    ->applyFromArray($assessmentstyle)
+                    ->applyFromArray($borderstyle)
+                    ->getAlignment()->setWrapText(true);
+            }
 
             if ($this->export_feedback) {
                 $coord = Coordinate::stringFromColumnIndex($col) . $row;

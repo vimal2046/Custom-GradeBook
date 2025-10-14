@@ -78,7 +78,7 @@ class grade_export_customexcel extends grade_export {
 
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('Results template sample');
+        $sheet->setTitle('Grade Report');
 
         // Adding logo.
 
@@ -216,7 +216,7 @@ class grade_export_customexcel extends grade_export {
         $sheet->getStyle('B10')->applyFromArray($notesstyle);
 
         // Grade Letters reference (single-column scale in A11 / B11↓).
-        $context = context_course::instance($this->course->id);
+      /*  $context = context_course::instance($this->course->id);
         $letters = grade_get_letters($context);
         if (empty($letters)) {
             $syscontext = context_system::instance();
@@ -249,6 +249,29 @@ class grade_export_customexcel extends grade_export {
                 $prevboundary = (float)$lowerboundary;
             }
         }
+            */
+        // --- Static Grade Scale Section --- //
+        $row = 12;
+        $sheet->setCellValue("A{$row}", 'Grade scale:');
+        $sheet->getStyle("A{$row}")->applyFromArray($gradescalestyle);
+
+        // Define static grade scale.
+        $gradescale = [
+            ['High Distinction', '85 – 100'],
+            ['Distinction', '75 – 84'],
+            ['Credit', '65 – 74'],
+            ['Pass', '50 – 64'],
+            ['Fail', '0 – 49'],
+        ];
+
+// Write each grade line in column B.
+foreach ($gradescale as $entry) {
+    
+    $sheet->setCellValue("B{$row}", "{$entry[0]}: {$entry[1]}");
+    $sheet->getStyle("B{$row}")->applyFromArray(['font' => ['size' => 11]]);
+    $row++;
+}
+
 
         // Handle selected grade items.
         $selecteditemids = [];
@@ -280,6 +303,14 @@ class grade_export_customexcel extends grade_export {
                 }
             }
         }
+        // Step 1: Identify categories that have totals.
+        $categorieswithtotals = [];
+        foreach ($assessmentitems as $item) {
+            if ($item->itemtype === 'category') {
+                $categorieswithtotals[$item->iteminstance] = true;
+            }
+        }
+
 
         if (empty($assessmentitems) && empty($courseitem)) {
             $sheet->setCellValue('A6', 'No grade items selected for export.');
@@ -383,19 +414,35 @@ class grade_export_customexcel extends grade_export {
             $sheet->setCellValue($startcolletter . $row, $displayname);
 
             // Apply different colors for assignments vs totals.
-            if ($item->itemtype === 'mod') {
-                // Regular assignment → grey.
+            // Determine display name.
+            $sheet->setCellValue($startcolletter . $row, $displayname);
+
+            // Step 2: Detect if this is a sub-assessment under a category that has a total.
+            $isSubAssessmentOfTotal = false;
+            if ($item->itemtype === 'mod' && !empty($item->categoryid)) {
+                $isSubAssessmentOfTotal = isset($categorieswithtotals[$item->categoryid]);
+            }
+
+            // Step 3: Apply shading logic.
+            if ($isSubAssessmentOfTotal) {
+                // Belongs to a category with a total → grey.
                 $sheet->getStyle("{$startcolletter}{$row}:{$endcolletter}{$row}")
                     ->applyFromArray($assignmentheaderstyle)
                     ->applyFromArray($borderstyle)
                     ->getAlignment()->setWrapText(true);
-            } else {
-                // Category total or course total → keep existing color.
+            } else if ($item->itemtype === 'category') {
+                // Category total → orange.
                 $sheet->getStyle("{$startcolletter}{$row}:{$endcolletter}{$row}")
                     ->applyFromArray($assessmentstyle)
                     ->applyFromArray($borderstyle)
                     ->getAlignment()->setWrapText(true);
+            } else {
+                // Standalone assignment or others → plain (no fill).
+                $sheet->getStyle("{$startcolletter}{$row}:{$endcolletter}{$row}")
+                    ->applyFromArray($borderstyle)
+                    ->getAlignment()->setWrapText(true);
             }
+
 
             if ($this->export_feedback) {
                 $coord = Coordinate::stringFromColumnIndex($col) . $row;

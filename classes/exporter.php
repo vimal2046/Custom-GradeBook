@@ -210,10 +210,11 @@ class grade_export_customexcel extends grade_export {
             'The scores below are based on marks out of 100 for each assesment item.' .
             'Weightings and grade scale are provided for reference');
         $sheet->getStyle('B8')->applyFromArray($notesstyle);
-        $sheet->setCellValue('B9', 'All course totals are rounded to the whole number.');
-        $sheet->getStyle('B9')->applyFromArray($notesboldstyle);
-        $sheet->setCellValue('B10', 'Sub-assessment columns are shaded in grey for easy identification.');
-        $sheet->getStyle('B10')->applyFromArray($notesstyle);
+        $sheet->setCellValue('B9', 'Sub-assessments for a category/main assessment and their respective grade weights are shaded in grey');
+        $sheet->getStyle('B9')->applyFromArray($notesstyle);
+        $sheet->setCellValue('B10', 'All course totals are rounded to the whole number.');
+        $sheet->getStyle('B10')->applyFromArray($notesboldstyle);
+
 
         // Grade Letters reference (single-column scale in A11 / B11↓).
       /*  $context = context_course::instance($this->course->id);
@@ -264,13 +265,13 @@ class grade_export_customexcel extends grade_export {
             ['Fail', '0 – 49'],
         ];
 
-// Write each grade line in column B.
-foreach ($gradescale as $entry) {
-    
-    $sheet->setCellValue("B{$row}", "{$entry[0]}: {$entry[1]}");
-    $sheet->getStyle("B{$row}")->applyFromArray(['font' => ['size' => 11]]);
-    $row++;
-}
+        // Write each grade line in column B.
+        foreach ($gradescale as $entry) {
+            
+            $sheet->setCellValue("B{$row}", "{$entry[0]}: {$entry[1]}");
+            $sheet->getStyle("B{$row}")->applyFromArray(['font' => ['size' => 11]]);
+            $row++;
+        }
 
 
         // Handle selected grade items.

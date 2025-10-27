@@ -558,15 +558,8 @@ class grade_export_customexcel extends grade_export
             $c++;
 
             // Assignments & category items.
-            $missing_main = false;
-            $missing_sub = false;
-
             foreach ($assessmentitems as $item) {
-                // Identify main assessments (top-level items contributing to course grade)
-                $is_main = ($item->itemtype === 'mod'); // Adjust if needed based on your gradebook setup
-
                 $grade = grade_grade::fetch(['itemid' => $item->id, 'userid' => $user->id]);
-
                 foreach ($this->displaytype as $gradedisplayconst) {
                     $val = ($grade && $grade->finalgrade !== null)
                         ? $this->format_grade($grade, $gradedisplayconst)
@@ -575,25 +568,20 @@ class grade_export_customexcel extends grade_export
                     $coord = Coordinate::stringFromColumnIndex($c) . $row;
                     $sheet->setCellValue($coord, $val);
 
+                    // Center align.
                     $sheet->getStyle($coord)->getAlignment()
                         ->setHorizontal(Alignment::HORIZONTAL_CENTER)
                         ->setVertical(Alignment::VERTICAL_CENTER);
 
-                    // NEW: Distinguish missing main vs missing sub
+                    // If value is "-" → mark non-submission + red bg.
                     if ($val === '-') {
-                        if ($is_main) {
-                            $missing_main = true;
-                        } else {
-                            $missing_sub = true;
-                        }
-
+                        $nonsubmission = true;
                         $sheet->getStyle($coord)->getFill()->setFillType(Fill::FILL_SOLID)
                             ->getStartColor()->setRGB('EF4C4D'); // Light red background.
                     }
 
                     $c++;
                 }
-
                 if ($this->export_feedback) {
                     $feedbacktext = ($grade && !empty(trim(strip_tags($grade->feedback))))
                         ? trim(strip_tags($grade->feedback))
@@ -605,10 +593,8 @@ class grade_export_customexcel extends grade_export
             }
 
             $finalpercent = null;
-
             if ($courseitem) {
                 $coursegrade = grade_grade::fetch(['itemid' => $courseitem->id, 'userid' => $user->id]);
-
                 foreach ($this->displaytype as $gradedisplayconst) {
                     $val = ($coursegrade && $coursegrade->finalgrade !== null)
                         ? $this->format_grade($coursegrade, $gradedisplayconst)
@@ -617,14 +603,14 @@ class grade_export_customexcel extends grade_export
                     $coord = Coordinate::stringFromColumnIndex($c) . $row;
                     $sheet->setCellValue($coord, $val);
 
+                    // Center align.
                     $sheet->getStyle($coord)->getAlignment()
                         ->setHorizontal(Alignment::HORIZONTAL_CENTER)
                         ->setVertical(Alignment::VERTICAL_CENTER);
 
+                    // If missing → mark non-submission + red bg.
                     if ($val === '-') {
-                        // Course grade missing counts as main missing
-                        $missing_main = true;
-
+                        $nonsubmission = true;
                         $sheet->getStyle($coord)->getFill()->setFillType(Fill::FILL_SOLID)
                             ->getStartColor()->setRGB('EF4C4D');
                     }
@@ -637,27 +623,17 @@ class grade_export_customexcel extends grade_export
                 }
             }
 
-            // Final Grade Decision Logic (NEW & CORRECTED)
+            // Final Grade.
             $gradecoord = Coordinate::stringFromColumnIndex($gradecolindex) . $row;
-
-            if ($missing_main) {
-                // Missing a MAIN assessment → Incomplete – Fail
-                $sheet->setCellValue($gradecoord, 'Incomplete - Fail');
-                $sheet->getStyle($gradecoord)->getFont()->getColor()->setRGB('FF0000');
+            if ($nonsubmission) {
+                $sheet->setCellValue($gradecoord, 'Fail (Non submission)');
+                $sheet->getStyle($gradecoord)->getFont()->getColor()->setRGB('FF0000'); // Red text.
                 $sheet->getStyle($gradecoord)->getFill()->setFillType(Fill::FILL_SOLID)
-                    ->getStartColor()->setRGB('FFCCCC');
-            } elseif ($finalpercent !== null && $finalpercent < 50) {
-                // All main tasks attempted but final total < 50% → Fail
-                $sheet->setCellValue($gradecoord, 'Fail');
-                $sheet->getStyle($gradecoord)->getFont()->getColor()->setRGB('FF0000');
-                $sheet->getStyle($gradecoord)->getFill()->setFillType(Fill::FILL_SOLID)
-                    ->getStartColor()->setRGB('FFCCCC');
+                    ->getStartColor()->setRGB('FFCCCC'); // Light red background.
             } else {
-                // Pass or no main requirements missing
                 $sheet->setCellValue($gradecoord, $finalpercent !== null
                     ? $this->get_grade_letter($finalpercent)
                     : '-');
-
                 $sheet->getStyle($gradecoord)->getAlignment()
                     ->setHorizontal(Alignment::HORIZONTAL_CENTER)
                     ->setVertical(Alignment::VERTICAL_CENTER);

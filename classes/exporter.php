@@ -205,13 +205,13 @@ class grade_export_customexcel extends grade_export
         $sheet->mergeCells('A5:B5');
         $sheet->setCellValue('A5', 'Reference Information:');
         $sheet->getStyle('A5')->applyFromArray($refstyle);
-        $sheet->setCellValue('B6', 'A dash (-) signifies no submission (automatic fail).');
+        $sheet->setCellValue('B6', 'A dash (-) signifies no submission (Incomplete fail).');
         $sheet->getStyle('B6')->applyFromArray($notesstyle);
         $sheet->setCellValue('B7', 'A zero (0) signifies late submission beyond 2 weeks.');
         $sheet->getStyle('B7')->applyFromArray($notesstyle);
         $sheet->setCellValue(
             'B8',
-            'The scores below are based on marks out of 100 for each assesment item.' .
+            'The scores below are based on marks out of 100 for each assesments item.' .
                 'Weightings and grade scale are provided for reference'
         );
         $sheet->getStyle('B8')->applyFromArray($notesstyle);
@@ -557,115 +557,143 @@ class grade_export_customexcel extends grade_export
                 ->setVertical(Alignment::VERTICAL_CENTER);
             $c++;
 
-            // Assignments & category items.
-            $missing_main = false;
-            $missing_sub = false;
+// Assignments & category items.
+$missing_main = false;
+$missing_sub = false;
+$main_summary = []; // Track sub-grades per main
 
-            foreach ($assessmentitems as $item) {
-                // Identify main assessments (top-level items contributing to course grade)
-                // Identify main assessments (category totals contributing directly to course total)
-                $is_main = ($item->itemtype === 'category' ||
-                    stripos($item->itemname, 'total') !== false);
+foreach ($assessmentitems as $item) {
 
-                $grade = grade_grade::fetch(['itemid' => $item->id, 'userid' => $user->id]);
+    // --- Hierarchical main/sub detection ---
+    $name = strtolower($item->itemname ?? '');
+    $is_total = str_contains($name, 'total');
+    $is_sub   = preg_match('/(week\s*\d+|part\s*[a-z0-9]|forum\s*\d+|task\s*\d+|section\s*\d+)/i', $name);
+    $is_main  = !$is_total && !$is_sub; // main if not total or sub
 
-                foreach ($this->displaytype as $gradedisplayconst) {
-                    $val = ($grade && $grade->finalgrade !== null)
-                        ? $this->format_grade($grade, $gradedisplayconst)
-                        : '-';
+    // Group key by Assessment #
+    $mainkey = null;
+    if (preg_match('/assessment\s*\d+/i', $name, $m)) {
+        $mainkey = strtolower($m[0]);
+        if (!isset($main_summary[$mainkey])) {
+            $main_summary[$mainkey] = ['has_grade' => false, 'all_missing' => true];
+        }
+    }
 
-                    $coord = Coordinate::stringFromColumnIndex($c) . $row;
-                    $sheet->setCellValue($coord, $val);
+    $grade = grade_grade::fetch(['itemid' => $item->id, 'userid' => $user->id]);
 
-                    $sheet->getStyle($coord)->getAlignment()
-                        ->setHorizontal(Alignment::HORIZONTAL_CENTER)
-                        ->setVertical(Alignment::VERTICAL_CENTER);
+    foreach ($this->displaytype as $gradedisplayconst) {
+        $val = ($grade && $grade->finalgrade !== null)
+            ? $this->format_grade($grade, $gradedisplayconst)
+            : '-';
 
-                    // NEW: Distinguish missing main vs missing sub
-                    if ($val === '-') {
-                        if ($is_main) {
-                            $missing_main = true;
-                        } else {
-                            $missing_sub = true;
-                        }
+        $coord = Coordinate::stringFromColumnIndex($c) . $row;
+        $sheet->setCellValue($coord, $val);
 
-                        $sheet->getStyle($coord)->getFill()->setFillType(Fill::FILL_SOLID)
-                            ->getStartColor()->setRGB('EF4C4D'); // Light red background.
-                    }
+        $sheet->getStyle($coord)->getAlignment()
+            ->setHorizontal(Alignment::HORIZONTAL_CENTER)
+            ->setVertical(Alignment::VERTICAL_CENTER);
 
-                    $c++;
-                }
-
-                if ($this->export_feedback) {
-                    $feedbacktext = ($grade && !empty(trim(strip_tags($grade->feedback))))
-                        ? trim(strip_tags($grade->feedback))
-                        : '-';
-                    $coord = Coordinate::stringFromColumnIndex($c) . $row;
-                    $sheet->setCellValue($coord, $feedbacktext);
-                    $c++;
-                }
-            }
-
-            $finalpercent = null;
-
-            if ($courseitem) {
-                $coursegrade = grade_grade::fetch(['itemid' => $courseitem->id, 'userid' => $user->id]);
-
-                foreach ($this->displaytype as $gradedisplayconst) {
-                    $val = ($coursegrade && $coursegrade->finalgrade !== null)
-                        ? $this->format_grade($coursegrade, $gradedisplayconst)
-                        : '-';
-
-                    $coord = Coordinate::stringFromColumnIndex($c) . $row;
-                    $sheet->setCellValue($coord, $val);
-
-                    $sheet->getStyle($coord)->getAlignment()
-                        ->setHorizontal(Alignment::HORIZONTAL_CENTER)
-                        ->setVertical(Alignment::VERTICAL_CENTER);
-
-                    if ($val === '-') {
-                        // Course grade missing counts as main missing
-                        $missing_main = true;
-
-                        $sheet->getStyle($coord)->getFill()->setFillType(Fill::FILL_SOLID)
-                            ->getStartColor()->setRGB('EF4C4D');
-                    }
-
-                    $c++;
-                }
-
-                if ($coursegrade && $coursegrade->finalgrade !== null) {
-                    $finalpercent = floatval($coursegrade->finalgrade / $courseitem->grademax * 100);
-                }
-            }
-
-            // Final Grade Decision Logic (NEW & CORRECTED)
-            $gradecoord = Coordinate::stringFromColumnIndex($gradecolindex) . $row;
-
-            if ($missing_main) {
-                // Missing a MAIN assessment → Incomplete – Fail
-                $sheet->setCellValue($gradecoord, 'Incomplete - Fail');
-                $sheet->getStyle($gradecoord)->getFont()->getColor()->setRGB('FF0000');
-                $sheet->getStyle($gradecoord)->getFill()->setFillType(Fill::FILL_SOLID)
-                    ->getStartColor()->setRGB('FFCCCC');
-            } elseif ($finalpercent !== null && $finalpercent < 50) {
-                // All main tasks attempted but final total < 50% → Fail
-                $sheet->setCellValue($gradecoord, 'Fail');
-                $sheet->getStyle($gradecoord)->getFont()->getColor()->setRGB('FF0000');
-                $sheet->getStyle($gradecoord)->getFill()->setFillType(Fill::FILL_SOLID)
-                    ->getStartColor()->setRGB('FFCCCC');
+        // Mark missing values
+        if (trim((string)$val) === '' || $val === '-' || $val === null) {
+            if ($is_main) {
+                $missing_main = true;
             } else {
-                // Pass or no main requirements missing
-                $sheet->setCellValue($gradecoord, $finalpercent !== null
-                    ? $this->get_grade_letter($finalpercent)
-                    : '-');
-
-                $sheet->getStyle($gradecoord)->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER)
-                    ->setVertical(Alignment::VERTICAL_CENTER);
+                $missing_sub = true;
             }
 
-            $row++;
+            $sheet->getStyle($coord)->getFill()->setFillType(Fill::FILL_SOLID)
+                ->getStartColor()->setRGB('EF4C4D');
+        } else if ($mainkey) {
+            // If this sub has a grade, mark parent as having data
+            $main_summary[$mainkey]['has_grade'] = true;
+            $main_summary[$mainkey]['all_missing'] = false;
+        }
+
+        $c++;
+    }
+
+    if ($this->export_feedback) {
+        $feedbacktext = ($grade && !empty(trim(strip_tags($grade->feedback))))
+            ? trim(strip_tags($grade->feedback))
+            : '-';
+        $coord = Coordinate::stringFromColumnIndex($c) . $row;
+        $sheet->setCellValue($coord, $feedbacktext);
+        $c++;
+    }
+}
+
+// --- Post-pass: if all subs of a main are missing, mark as missing main ---
+foreach ($main_summary as $key => $status) {
+    if ($status['all_missing']) {
+        $missing_main = true;
+        break; // one missing main triggers incomplete fail
+    }
+}
+
+
+$finalpercent = null;
+
+if ($courseitem) {
+    $coursegrade = grade_grade::fetch(['itemid' => $courseitem->id, 'userid' => $user->id]);
+
+    foreach ($this->displaytype as $gradedisplayconst) {
+        $val = ($coursegrade && $coursegrade->finalgrade !== null)
+            ? $this->format_grade($coursegrade, $gradedisplayconst)
+            : '-';
+
+        $coord = Coordinate::stringFromColumnIndex($c) . $row;
+        $sheet->setCellValue($coord, $val);
+
+        $sheet->getStyle($coord)->getAlignment()
+            ->setHorizontal(Alignment::HORIZONTAL_CENTER)
+            ->setVertical(Alignment::VERTICAL_CENTER);
+
+        if ($val === '-') {
+            // Missing overall course grade also counts as main missing
+            $missing_main = true;
+
+            $sheet->getStyle($coord)->getFill()->setFillType(Fill::FILL_SOLID)
+                ->getStartColor()->setRGB('EF4C4D');
+        }
+
+        $c++;
+    }
+
+    if ($coursegrade && $coursegrade->finalgrade !== null) {
+        $finalpercent = floatval($coursegrade->finalgrade / $courseitem->grademax * 100);
+    }
+} 
+
+// --- Final Grade Decision Logic ---
+$gradecoord = Coordinate::stringFromColumnIndex($gradecolindex) . $row;
+
+if ($missing_main) {
+    // Missing a MAIN assessment → Incomplete – Fail
+    $sheet->setCellValue($gradecoord, 'Incomplete - Fail');
+    $sheet->getStyle($gradecoord)->getFont()->getColor()->setRGB('FF0000');
+    $sheet->getStyle($gradecoord)->getFill()->setFillType(Fill::FILL_SOLID)
+        ->getStartColor()->setRGB('FFCCCC');
+
+} elseif ($finalpercent !== null && $finalpercent < 50) {
+    // All main tasks attempted but final total < 50% → Fail
+    $sheet->setCellValue($gradecoord, 'Fail');
+    $sheet->getStyle($gradecoord)->getFont()->getColor()->setRGB('FF0000');
+    $sheet->getStyle($gradecoord)->getFill()->setFillType(Fill::FILL_SOLID)
+        ->getStartColor()->setRGB('FFCCCC');
+
+} else {
+    // Pass or higher grade (no missing main)
+    $sheet->setCellValue($gradecoord, $finalpercent !== null
+        ? $this->get_grade_letter($finalpercent)
+        : '-');
+
+    $sheet->getStyle($gradecoord)->getAlignment()
+        ->setHorizontal(Alignment::HORIZONTAL_CENTER)
+        ->setVertical(Alignment::VERTICAL_CENTER);
+}
+
+$row++;
+
         }
 
         // Apply thin border to the entire used range.

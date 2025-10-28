@@ -563,7 +563,9 @@ class grade_export_customexcel extends grade_export
 
             foreach ($assessmentitems as $item) {
                 // Identify main assessments (top-level items contributing to course grade)
-                $is_main = ($item->itemtype === 'mod'); // Adjust if needed based on your gradebook setup
+                // Identify main assessments (category totals contributing directly to course total)
+                $is_main = ($item->itemtype === 'category' ||
+                    stripos($item->itemname, 'total') !== false);
 
                 $grade = grade_grade::fetch(['itemid' => $item->id, 'userid' => $user->id]);
 
